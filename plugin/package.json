@@ -1,0 +1,10 @@
+{
+  "name": "open-island-mobile-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "open-island-mobile.js",
+  "scripts": {
+    "test": "node --test test/"
+  }
+}

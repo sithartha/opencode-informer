@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Expo / React Native generated native dirs and caches
+app/ios/
+app/android/
+app/.expo/
+app/dist/
+app/web-build/
+
+# macOS helper build output
+mac-helper/dist/
+mac-helper/.build/
+
+# Build artifacts
+*.ipa
+*.apk
+*.aab
+DerivedData/
+
+# Secrets / credentials
+*.p8
+*.p12
+*.jks
+*.keystore
+*.mobileprovision
+.env*.local
+
+# Misc
+.DS_Store
+*.log

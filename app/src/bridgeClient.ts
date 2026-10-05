@@ -1,0 +1,97 @@
+import { CONTRACT } from "./contract"
+import type { Snapshot } from "./events"
+
+export type FetchLike = typeof fetch
+
+export function baseUrl(host: string, port: number): string {
+  return `http://${host}:${port}`
+}
+
+export function pairUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.pair}`
+}
+
+export function stateUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.state}`
+}
+
+export function resolutionUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.resolution}`
+}
+
+export function promptUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.prompt}`
+}
+
+export function eventsUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.events}`
+}
+
+function authHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+}
+
+export type PairResult =
+  | { status: "pending"; approvalID: string }
+  | { status: "approved"; token: string }
+  | { status: "denied" }
+
+export async function beginPairing(base: string, deviceName: string, fetchImpl: FetchLike = fetch): Promise<PairResult> {
+  const res = await fetchImpl(pairUrl(base), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ deviceName }),
+  })
+  if (res.status === 403) return { status: "denied" }
+  const body = (await res.json()) as { status?: string; approvalID?: string; token?: string }
+  if (body.token) return { status: "approved", token: body.token }
+  return { status: "pending", approvalID: String(body.approvalID) }
+}
+
+export async function pollPairing(base: string, approvalID: string, fetchImpl: FetchLike = fetch): Promise<PairResult> {
+  const res = await fetchImpl(`${pairUrl(base)}?approvalID=${encodeURIComponent(approvalID)}`)
+  if (res.status === 403) return { status: "denied" }
+  const body = (await res.json()) as { status?: string; token?: string }
+  if (body.status === "approved" && body.token) return { status: "approved", token: body.token }
+  if (body.status === "denied") return { status: "denied" }
+  return { status: "pending", approvalID }
+}
+
+export async function fetchState(base: string, token: string, fetchImpl: FetchLike = fetch): Promise<Snapshot> {
+  const res = await fetchImpl(stateUrl(base), { headers: authHeaders(token) })
+  if (res.status === 401) throw new Error("unauthorized")
+  if (!res.ok) throw new Error(`state ${res.status}`)
+  return (await res.json()) as Snapshot
+}
+
+export async function postResolution(
+  base: string,
+  token: string,
+  requestID: string,
+  action: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<boolean> {
+  const res = await fetchImpl(resolutionUrl(base), {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ requestID, action }),
+  })
+  if (res.status === 401) throw new Error("unauthorized")
+  return res.ok
+}
+
+export async function postPrompt(
+  base: string,
+  token: string,
+  sessionID: string,
+  text: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<boolean> {
+  const res = await fetchImpl(promptUrl(base), {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ sessionID, text }),
+  })
+  if (res.status === 401) throw new Error("unauthorized")
+  return res.ok
+}

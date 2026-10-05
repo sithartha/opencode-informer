@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "bridge": { "host": "0.0.0.0", "defaultPort": 38963 },
+  "helper": { "host": "127.0.0.1", "defaultPort": 38964, "ringPath": "/ring" },
+  "endpoints": {
+    "pair": "/pair",
+    "state": "/state",
+    "status": "/status",
+    "events": "/events",
+    "resolution": "/resolution"
+  },
+  "phases": ["running", "waiting-permission", "waiting-answer", "completed", "ended"],
+  "streamEvents": [
+    "session.started",
+    "session.ended",
+    "prompt.submitted",
+    "tool.started",
+    "tool.ended",
+    "permission.requested",
+    "question.asked",
+    "turn.completed",
+    "actionable.resolved"
+  ],
+  "doorbellKinds": ["permission", "question", "completion", "pairing"],
+  "ble": {
+    "serviceUUID": "7b1e5a20-6c1a-4f4e-9c3a-2d5f8b9a1c01",
+    "doorbellUUID": "7b1e5a21-6c1a-4f4e-9c3a-2d5f8b9a1c02",
+    "rendezvousUUID": "7b1e5a22-6c1a-4f4e-9c3a-2d5f8b9a1c03",
+    "pairingUUID": "7b1e5a23-6c1a-4f4e-9c3a-2d5f8b9a1c04"
+  },
+  "schemas": {
+    "state": { "required": ["activeSessionCount", "sessions"] },
+    "session": { "required": ["id", "agent", "cwd", "phase", "currentTool", "lastActivity", "updatedAt"] },
+    "session.started": { "required": ["sessionID", "agent", "cwd"] },
+    "session.ended": { "required": ["sessionID"] },
+    "prompt.submitted": { "required": ["sessionID", "text"] },
+    "tool.started": { "required": ["sessionID", "tool", "input"] },
+    "tool.ended": { "required": ["sessionID", "tool"] },
+    "permission.requested": { "required": ["sessionID", "requestID", "title", "summary", "agent"] },
+    "question.asked": { "required": ["sessionID", "requestID", "title", "options"] },
+    "turn.completed": { "required": ["sessionID", "summary"] },
+    "actionable.resolved": { "required": ["sessionID", "requestID"] },
+    "resolution.request": { "required": ["requestID", "action"] },
+    "doorbell": { "required": ["kind"] },
+    "pair.request": { "required": ["deviceName"] },
+    "pair.status": { "required": ["status"] }
+  },
+  "fixtures": {
+    "state.running": {
+      "schema": "state",
+      "value": {
+        "activeSessionCount": 1,
+        "sessions": [
+          {
+            "id": "ses_1",
+            "agent": "opencode",
+            "cwd": "/Users/dev/project",
+            "phase": "running",
+            "currentTool": "Bash",
+            "lastActivity": "Running tests",
+            "updatedAt": 1759600000000
+          }
+        ]
+      }
+    },
+    "state.empty": { "schema": "state", "value": { "activeSessionCount": 0, "sessions": [] } },
+    "session.started": {
+      "schema": "session.started",
+      "value": { "sessionID": "ses_1", "agent": "opencode", "cwd": "/Users/dev/project" }
+    },
+    "session.ended": { "schema": "session.ended", "value": { "sessionID": "ses_1" } },
+    "prompt.submitted": {
+      "schema": "prompt.submitted",
+      "value": { "sessionID": "ses_1", "text": "Add a health endpoint" }
+    },
+    "tool.started": {
+      "schema": "tool.started",
+      "value": { "sessionID": "ses_1", "tool": "Bash", "input": "npm test" }
+    },
+    "tool.ended": { "schema": "tool.ended", "value": { "sessionID": "ses_1", "tool": "Bash" } },
+    "permission.requested": {
+      "schema": "permission.requested",
+      "value": {
+        "sessionID": "ses_1",
+        "requestID": "req_1",
+        "title": "Allow Bash",
+        "summary": "rm -rf build/",
+        "agent": "opencode",
+        "workingDirectory": "/Users/dev/project"
+      }
+    },
+    "question.asked": {
+      "schema": "question.asked",
+      "value": {
+        "sessionID": "ses_1",
+        "requestID": "req_2",
+        "title": "Which database should I use?",
+        "options": ["PostgreSQL", "SQLite"]
+      }
+    },
+    "turn.completed": {
+      "schema": "turn.completed",
+      "value": { "sessionID": "ses_1", "summary": "Added the health endpoint" }
+    },
+    "actionable.resolved": {
+      "schema": "actionable.resolved",
+      "value": { "sessionID": "ses_1", "requestID": "req_1" }
+    },
+    "resolution.request": {
+      "schema": "resolution.request",
+      "value": { "requestID": "req_1", "action": "allow" }
+    },
+    "doorbell.permission": {
+      "schema": "doorbell",
+      "value": { "kind": "permission", "requestID": "req_1", "sessionID": "ses_1", "title": "Allow Bash" }
+    },
+    "pair.request": { "schema": "pair.request", "value": { "deviceName": "Anton's iPhone" } },
+    "pair.status": { "schema": "pair.status", "value": { "status": "pending" } }
+  }
+}
