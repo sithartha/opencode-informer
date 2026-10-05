@@ -44,9 +44,10 @@ The app does **not** use the camera, microphone, location, contacts, photos, or 
 
 The app collects no personal data and sends nothing to the developer or to any third party.
 The pairing token is stored in the device Keychain; a user-editable device name and app
-settings are stored locally. See the privacy policy: **<PRIVACY POLICY URL>**.
+settings are stored locally. See the privacy policy:
+**https://sithartha.github.io/opencode-informer/privacy-policy.html**.
 
 ## Contact
 
-Name: <YOUR NAME>
-Email: <YOUR EMAIL>
+Name: Anton Budnik
+Email: gsithartha@gmail.com
