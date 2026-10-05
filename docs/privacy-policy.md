@@ -1,6 +1,6 @@
 # Privacy Policy — OpenCode Informer
 
-_Last updated: <DATE>_
+_Last updated: 2026-10-06_
 
 OpenCode Informer ("the app") is a local companion for the OpenCode developer tool. This
 policy explains what the app does with your information.
@@ -48,4 +48,4 @@ of the app means you accept the current policy.
 
 ## Contact
 
-Email: <YOUR EMAIL>
+Email: gsithartha@gmail.com
