@@ -3,11 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { useBridge } from "./src/useBridge"
-import type { PendingRequest } from "./src/events"
+import type { PendingRequest, Session } from "./src/events"
 import { aggregate } from "./src/aggregate"
 import { resolveTheme, type ThemeMode } from "./src/theme"
 import { createStyles } from "./src/styles"
-import { BrandMark, GradientButton, HeroCard, NeedsAttentionCard, PreviewScreen, SessionCard } from "./src/components"
+import { BrandMark, ConfirmModal, GradientButton, HeroCard, NeedsAttentionCard, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
 import { DemoScreen } from "./src/DemoScreen"
 import { FadeIn, GlowDot, PressableScale } from "./src/ui"
 
@@ -29,6 +29,11 @@ export default function App() {
     connectManual,
     resolve,
     sendPrompt,
+    startSession,
+    stopSession,
+    closeSession,
+    switchSession,
+    loadOptions,
     liveActivityEnabled,
     setLiveActivityOn,
     deviceName,
@@ -46,6 +51,9 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showDemo, setShowDemo] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<{ kind: "start" | "stop" | "close"; sessionID?: string } | null>(null)
+  const [switcherSession, setSwitcherSession] = useState<Session | null>(null)
+  const [switchOptions, setSwitchOptions] = useState<{ agents: string[]; models: { providerID: string; id: string; name?: string }[] }>({ agents: [], models: [] })
   useEffect(() => setNameDraft(deviceName), [deviceName])
 
   const scrollRef = useRef<ScrollView>(null)
@@ -76,6 +84,23 @@ export default function App() {
       scrollRef.current?.scrollTo({ y: offsetRef.current + (fieldBottom - visibleBottom), animated: true })
     }
   }, [])
+
+  const openSwitcher = useCallback(
+    async (session: Session) => {
+      setSwitcherSession(session)
+      setSwitchOptions(await loadOptions())
+    },
+    [loadOptions],
+  )
+
+  const confirmPending = useCallback(async () => {
+    const action = confirmAction
+    setConfirmAction(null)
+    if (!action) return
+    if (action.kind === "start") await startSession()
+    else if (action.kind === "stop" && action.sessionID) await stopSession(action.sessionID)
+    else if (action.kind === "close" && action.sessionID) await closeSession(action.sessionID)
+  }, [confirmAction, startSession, stopSession, closeSession])
 
   const pending = Object.values(appState.pending)
   const agg = aggregate(appState)
@@ -124,7 +149,7 @@ export default function App() {
         {connection.error ? <Text style={styles.error}>{connection.error}</Text> : null}
 
         <FadeIn style={styles.heroWrap}>
-          <HeroCard agg={agg} theme={theme} styles={styles} />
+          <HeroCard agg={agg} theme={theme} styles={styles} onStart={() => setConfirmAction({ kind: "start" })} />
         </FadeIn>
 
         {!paired ? (
@@ -168,7 +193,18 @@ export default function App() {
         ) : null}
         {sessions.map((session, index) => (
           <FadeIn key={session.id} delay={index * 50} style={styles.cardGap}>
-            <SessionCard session={session} requests={pendingBySession[session.id] ?? []} resolve={resolve} theme={theme} styles={styles} onFieldFocus={focusField} onSendPrompt={sendPrompt} />
+            <SessionCard
+              session={session}
+              requests={pendingBySession[session.id] ?? []}
+              resolve={resolve}
+              theme={theme}
+              styles={styles}
+              onFieldFocus={focusField}
+              onSendPrompt={sendPrompt}
+              onStop={(sessionID) => setConfirmAction({ kind: "stop", sessionID })}
+              onClose={(sessionID) => setConfirmAction({ kind: "close", sessionID })}
+              onOpenSwitcher={(value) => void openSwitcher(value)}
+            />
           </FadeIn>
         ))}
         {keyboardHeight > 0 ? <View style={{ height: keyboardHeight + 24 }} /> : null}
@@ -254,6 +290,54 @@ export default function App() {
       </Modal>
 
       {showPreview ? <PreviewScreen onClose={() => setShowPreview(false)} theme={theme} styles={styles} resolve={resolve} /> : null}
+
+      <ConfirmModal
+        visible={confirmAction !== null}
+        title={
+          confirmAction?.kind === "close"
+            ? "Close this session?"
+            : confirmAction?.kind === "start"
+              ? "Start a new session?"
+              : "Stop this session?"
+        }
+        message={
+          confirmAction?.kind === "close"
+            ? "The OpenCode session will be closed and its card removed."
+            : confirmAction?.kind === "start"
+              ? "A new empty OpenCode session will be created; you can then send its first prompt."
+              : "The current turn will be stopped. You can then send a new prompt."
+        }
+        confirmLabel={confirmAction?.kind === "close" ? "Close" : confirmAction?.kind === "start" ? "Start" : "Stop"}
+        onConfirm={() => void confirmPending()}
+        onCancel={() => setConfirmAction(null)}
+        theme={theme}
+        styles={styles}
+      />
+
+      <SwitcherModal
+        visible={switcherSession !== null}
+        agents={switchOptions.agents}
+        models={switchOptions.models}
+        currentAgent={switcherSession?.agent}
+        currentModel={switcherSession?.model}
+        onSelectAgent={(agent) => {
+          const target = switcherSession
+          if (target) {
+            void switchSession(target.id, { agent })
+            setSwitcherSession(null)
+          }
+        }}
+        onSelectModel={(model) => {
+          const target = switcherSession
+          if (target) {
+            void switchSession(target.id, { model })
+            setSwitcherSession(null)
+          }
+        }}
+        onClose={() => setSwitcherSession(null)}
+        theme={theme}
+        styles={styles}
+      />
 
       <Modal visible={showDemo} animationType="slide" onRequestClose={() => setShowDemo(false)}>
         <DemoScreen

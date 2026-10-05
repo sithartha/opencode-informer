@@ -4,19 +4,27 @@ import http from "node:http"
 import { buildBridge } from "../src/bridge.js"
 
 function newBridge(overrides = {}) {
-  const calls = { permission: [], question: [], prompt: [] }
+  const calls = { permission: [], question: [], prompt: [], start: [], stop: [], close: [], switch: [] }
   const bridge = buildBridge({
     config: { port: 0, keepaliveMs: 30, host: "127.0.0.1" },
     applyPermission: async (args) => calls.permission.push(args),
     applyQuestion: async (args) => calls.question.push(args),
     applyPrompt: async (args) => calls.prompt.push(args),
+    startSession: async (args) => {
+      calls.start.push(args)
+      return { id: "ses_new" }
+    },
+    stopSession: async (args) => calls.stop.push(args),
+    closeSession: async (args) => calls.close.push(args),
+    optionsProvider: async () => ({ agents: ["build", "plan"], models: [{ providerID: "deepseek", id: "deepseek-flash" }] }),
+    switchSession: async (args) => calls.switch.push(args),
     ...overrides,
   })
   return { bridge, calls }
 }
 
-async function startBridge(t) {
-  const { bridge, calls } = newBridge()
+async function startBridge(t, overrides) {
+  const { bridge, calls } = newBridge(overrides)
   await bridge.server.start()
   const port = bridge.server.address().port
   t.after(() => bridge.server.stop())
@@ -238,6 +246,108 @@ test("POST /prompt requires a non-empty text", async (t) => {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
     body: JSON.stringify({ sessionID: "ses_1", text: "   " }),
+  })
+  assert.equal(res.status, 400)
+})
+
+test("POST /sessions starts a session", async (t) => {
+  const { bridge, calls, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const res = await fetch(`http://127.0.0.1:${port}/sessions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  })
+  assert.equal(res.status, 200)
+  const body = await res.json()
+  assert.equal(body.status, "accepted")
+  assert.equal(body.sessionID, "ses_new")
+  assert.equal(calls.start.length, 1)
+})
+
+test("POST /stop and /close forward the sessionID", async (t) => {
+  const { bridge, calls, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const headers = { "content-type": "application/json", authorization: `Bearer ${token}` }
+  const stop = await fetch(`http://127.0.0.1:${port}/stop`, { method: "POST", headers, body: JSON.stringify({ sessionID: "ses_1" }) })
+  assert.equal(stop.status, 200)
+  assert.deepEqual(calls.stop[0], { sessionID: "ses_1" })
+  const close = await fetch(`http://127.0.0.1:${port}/close`, { method: "POST", headers, body: JSON.stringify({ sessionID: "ses_1" }) })
+  assert.equal(close.status, 200)
+  assert.deepEqual(calls.close[0], { sessionID: "ses_1" })
+})
+
+test("lifecycle endpoints require a token and a sessionID", async (t) => {
+  const { bridge, port } = await startBridge(t)
+  const unauth = await fetch(`http://127.0.0.1:${port}/stop`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sessionID: "ses_1" }),
+  })
+  assert.equal(unauth.status, 401)
+
+  const token = await pair(port, bridge)
+  const missing = await fetch(`http://127.0.0.1:${port}/close`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  })
+  assert.equal(missing.status, 400)
+})
+
+test("a failing lifecycle applier reports not_applied without throwing", async (t) => {
+  const { bridge, port } = await startBridge(t, {
+    stopSession: async () => {
+      throw new Error("boom")
+    },
+  })
+  const token = await pair(port, bridge)
+  const res = await fetch(`http://127.0.0.1:${port}/stop`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ sessionID: "ses_1" }),
+  })
+  assert.equal(res.status, 409)
+  const body = await res.json()
+  assert.equal(body.status, "not_applied")
+})
+
+test("GET /options returns the discovered agents and models", async (t) => {
+  const { bridge, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const res = await fetch(`http://127.0.0.1:${port}/options`, { headers: { authorization: `Bearer ${token}` } })
+  assert.equal(res.status, 200)
+  const body = await res.json()
+  assert.deepEqual(body.agents, ["build", "plan"])
+  assert.deepEqual(body.models, [{ providerID: "deepseek", id: "deepseek-flash" }])
+})
+
+test("GET /options requires a token", async (t) => {
+  const { port } = await startBridge(t)
+  const res = await fetch(`http://127.0.0.1:${port}/options`)
+  assert.equal(res.status, 401)
+})
+
+test("POST /switch forwards the agent and model", async (t) => {
+  const { bridge, calls, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const model = { providerID: "anthropic", id: "claude", variant: "high" }
+  const res = await fetch(`http://127.0.0.1:${port}/switch`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ sessionID: "ses_1", agent: "plan", model }),
+  })
+  assert.equal(res.status, 200)
+  assert.deepEqual(calls.switch[0], { sessionID: "ses_1", agent: "plan", model })
+})
+
+test("POST /switch requires a target", async (t) => {
+  const { bridge, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const res = await fetch(`http://127.0.0.1:${port}/switch`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ sessionID: "ses_1" }),
   })
   assert.equal(res.status, 400)
 })

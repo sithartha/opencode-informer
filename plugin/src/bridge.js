@@ -47,6 +47,37 @@ export function buildBridge(options = {}) {
   const applyPermission = options.applyPermission || (async () => {})
   const applyQuestion = options.applyQuestion || (async () => {})
   const applyPrompt = options.applyPrompt || (async () => {})
+  const startSessionRaw = options.startSession || (async () => ({}))
+  const stopSession = options.stopSession || (async () => {})
+  const closeSession = options.closeSession || (async () => {})
+  const optionsProvider = options.optionsProvider || (async () => ({ agents: [], models: [] }))
+  const switchSessionRaw = options.switchSession || (async () => {})
+  // Apply the switch, then reflect it immediately (OpenCode reports the new
+  // agent/model only on the next step event).
+  const switchSession = async (args) => {
+    await switchSessionRaw(args)
+    const data = { sessionID: args.sessionID }
+    if (args.agent) data.agent = args.agent
+    if (args.model) data.model = args.model
+    handleEvent({ type: "session.meta", data })
+  }
+
+  // A session we create is empty and idle; OpenCode reports it as created, so
+  // force it idle without a completion notification (so the card shows a prompt).
+  const pendingIdle = new Map()
+  const markIdle = (sessionID) => handleEvent({ type: "session.idle.silent", data: { sessionID } })
+  const startSession = async (args) => {
+    const session = await startSessionRaw(args)
+    const id = session && (session.id || session.sessionID)
+    if (id) {
+      const timer = setTimeout(() => {
+        pendingIdle.delete(id)
+        markIdle(id)
+      }, 900)
+      pendingIdle.set(id, timer)
+    }
+    return session
+  }
 
   let server
   const resolution = new ResolutionCoordinator({
@@ -66,7 +97,34 @@ export function buildBridge(options = {}) {
     resolution,
     keepaliveMs: config.keepaliveMs,
     sendPrompt: applyPrompt,
+    startSession,
+    stopSession,
+    closeSession,
+    optionsProvider,
+    switchSession,
   })
+
+  const getSessionTitle = options.getSessionTitle
+  const TITLE_TRIGGERS = new Set(["session.created", "session.inbox.enqueued", "session.execution.started"])
+  const titleTimers = new Map()
+  // OpenCode does not put the session title in the event stream, so resolve it
+  // out of band (debounced) and feed it back through the model as session.title.
+  function refreshTitle(sessionID) {
+    if (!getSessionTitle || !sessionID) return
+    const existing = titleTimers.get(sessionID)
+    if (existing) clearTimeout(existing)
+    titleTimers.set(
+      sessionID,
+      setTimeout(() => {
+        titleTimers.delete(sessionID)
+        Promise.resolve(getSessionTitle({ sessionID }))
+          .then((title) => {
+            if (title) handleEvent({ type: "session.title", data: { sessionID, title } })
+          })
+          .catch(() => {})
+      }, 1200),
+    )
+  }
 
   function handleEvent(event) {
     dbg("event", { type: event && event.type, data: event && event.data })
@@ -89,6 +147,14 @@ export function buildBridge(options = {}) {
           title: emitted.data.title || emitted.data.summary || "",
         })
       }
+    }
+    const type = event && event.type
+    const sessionID = event && event.data && event.data.sessionID
+    if (TITLE_TRIGGERS.has(type)) refreshTitle(sessionID)
+    if (type === "session.created" && sessionID && pendingIdle.has(sessionID)) {
+      clearTimeout(pendingIdle.get(sessionID))
+      pendingIdle.delete(sessionID)
+      markIdle(sessionID)
     }
     return events
   }
@@ -140,6 +206,91 @@ function makePromptApplier(ctx) {
   }
 }
 
+function makeStartApplier(ctx) {
+  return async ({ title } = {}) => {
+    dbg("applyStart", { title })
+    const session = await ctx.session.create(title ? { title } : {})
+    dbg("applyStart ok", { id: session && (session.id || session.sessionID) })
+    return session
+  }
+}
+
+function makeStopApplier(ctx) {
+  return async ({ sessionID }) => {
+    dbg("applyStop", { sessionID })
+    await ctx.session.interrupt({ sessionID, continue: false })
+    dbg("applyStop ok", { sessionID })
+  }
+}
+
+function makeCloseApplier(ctx) {
+  return async ({ sessionID }) => {
+    dbg("applyClose", { sessionID })
+    await ctx.session.remove({ sessionID })
+    dbg("applyClose ok", { sessionID })
+  }
+}
+
+function asArray(value, keys) {
+  if (Array.isArray(value)) return value
+  if (value && typeof value === "object") {
+    for (const key of keys) if (Array.isArray(value[key])) return value[key]
+  }
+  return []
+}
+
+function makeOptionsApplier(ctx) {
+  return async () => {
+    const result = { agents: [], models: [] }
+    try {
+      const raw = typeof ctx.agent?.list === "function" ? await ctx.agent.list() : null
+      const agents = asArray(raw, ["agents", "items", "data"])
+      // Only user-selectable modes: primary agents (build/plan), not subagents.
+      const primary = agents.filter((a) => a.mode === "primary" || a.mode === "all")
+      const chosen = primary.length > 0 ? primary : agents.filter((a) => a.mode !== "subagent" && !a.hidden)
+      result.agents = chosen.map((a) => a.id || a.agentID || a.name).filter(Boolean)
+      dbg("options.agents", {
+        kind: Array.isArray(raw) ? "array" : typeof raw,
+        keys: raw && typeof raw === "object" ? Object.keys(raw).slice(0, 8) : [],
+        total: agents.length,
+        count: result.agents.length,
+        sample: agents.slice(0, 3).map((a) => ({ id: a.id || a.name, mode: a.mode, hidden: a.hidden })),
+      })
+    } catch (err) {
+      dbg("options.agents error", String(err && err.message))
+    }
+    try {
+      const raw = typeof ctx.model?.list === "function" ? await ctx.model.list() : null
+      const models = asArray(raw, ["models", "items", "data"])
+      result.models = models
+        .map((m) => ({
+          providerID: m.providerID || m.provider || "",
+          id: m.id || m.modelID || m.modelId || "",
+          name: m.name,
+          variant: m.variant,
+        }))
+        .filter((m) => m.id)
+      dbg("options.models", {
+        kind: Array.isArray(raw) ? "array" : typeof raw,
+        keys: raw && typeof raw === "object" ? Object.keys(raw).slice(0, 8) : [],
+        count: result.models.length,
+      })
+    } catch (err) {
+      dbg("options.models error", String(err && err.message))
+    }
+    return result
+  }
+}
+
+function makeSwitchApplier(ctx) {
+  return async ({ sessionID, agent, model }) => {
+    dbg("applySwitch", { sessionID, agent, model })
+    if (agent) await ctx.session.switchAgent({ sessionID, agent })
+    if (model) await ctx.session.switchModel({ sessionID, model })
+    dbg("applySwitch ok", { sessionID })
+  }
+}
+
 /**
  * OpenCode plugin entry. Starts the bridge once per process, subscribes to the
  * event stream, and returns a teardown. Fail-open: any startup failure leaves
@@ -151,7 +302,18 @@ export async function setup(ctx, options = {}) {
   const applyPermission = options.applyPermission || makePermissionApplier(ctx)
   const applyQuestion = options.applyQuestion || makeQuestionApplier()
   const applyPrompt = options.applyPrompt || makePromptApplier(ctx)
-  const bridge = buildBridge({ ...options, applyPermission, applyQuestion, applyPrompt })
+  const startSession = options.startSession || makeStartApplier(ctx)
+  const stopSession = options.stopSession || makeStopApplier(ctx)
+  const closeSession = options.closeSession || makeCloseApplier(ctx)
+  const optionsProvider = options.optionsProvider || makeOptionsApplier(ctx)
+  const switchSession = options.switchSession || makeSwitchApplier(ctx)
+  const getSessionTitle =
+    options.getSessionTitle ||
+    (async ({ sessionID }) => {
+      const info = await ctx.session.get({ sessionID })
+      return info && (info.title || info.name)
+    })
+  const bridge = buildBridge({ ...options, applyPermission, applyQuestion, applyPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession, getSessionTitle })
   dbg("setup", { port: bridge.config.port, host: bridge.config.host })
 
   try {

@@ -20,6 +20,16 @@ function permissionSummary(payload) {
   return clip(payload.metadata || {})
 }
 
+/** Normalize an OpenCode model ref to "provider/id" (with "#variant" when not default). */
+function normalizeModel(model) {
+  if (!model || typeof model !== "object") return ""
+  const provider = model.providerID || model.provider || ""
+  const id = model.id || model.modelID || ""
+  const base = provider && id ? `${provider}/${id}` : id || provider || ""
+  if (!base) return ""
+  return model.variant && model.variant !== "default" ? `${base}#${model.variant}` : base
+}
+
 function questionOptions(form) {
   const fields = Array.isArray(form && form.fields) ? form.fields : []
   const options = []
@@ -83,7 +93,9 @@ export class ActivityModel {
     if (!session) {
       session = {
         id,
+        title: "",
         agent: "opencode",
+        model: "",
         cwd: "",
         phase: "running",
         currentTool: null,
@@ -169,7 +181,9 @@ export class ActivityModel {
         const dir = (payload.location && payload.location.directory) || cwd || ""
         this.sessions.set(payload.sessionID, {
           id: payload.sessionID,
+          title: "",
           agent: "opencode",
+          model: "",
           cwd: dir,
           phase: "running",
           currentTool: null,
@@ -199,6 +213,70 @@ export class ActivityModel {
         return out
       }
 
+      // The session's title (name), resolved from OpenCode out of band.
+      case "session.title": {
+        if (this.isChild(payload.sessionID)) return out
+        const session = this.ensureSession(payload.sessionID)
+        const title = payload.title != null ? String(payload.title) : ""
+        if (session && title && title !== session.title) {
+          session.title = title
+          session.updatedAt = Date.now()
+          out.push(ev("session.updated", { sessionID: session.id, title }))
+        }
+        return out
+      }
+
+      // Optimistically apply an agent/model switch so clients reflect it at once
+      // (OpenCode only reports it on the next step event).
+      case "session.meta": {
+        if (this.isChild(payload.sessionID)) return out
+        const session = this.ensureSession(payload.sessionID)
+        if (session) {
+          let changed = false
+          if (payload.agent && payload.agent !== session.agent) {
+            session.agent = String(payload.agent)
+            changed = true
+          }
+          const model = normalizeModel(payload.model)
+          if (model && model !== session.model) {
+            session.model = model
+            changed = true
+          }
+          if (changed) {
+            session.updatedAt = Date.now()
+            out.push(ev("session.updated", { sessionID: session.id, agent: session.agent, model: session.model }))
+          }
+        }
+        return out
+      }
+
+      // Carries the active agent (mode) and model for the session's current step.
+      case "session.step.started": {        if (this.isChild(payload.sessionID)) return out
+        const session = this.ensureSession(payload.sessionID)
+        if (session) {
+          let changed = false
+          if (session.phase !== "running") {
+            session.phase = "running"
+            changed = true
+          }
+          const agent = payload.agent ? String(payload.agent) : ""
+          if (agent && agent !== session.agent) {
+            session.agent = agent
+            changed = true
+          }
+          const model = normalizeModel(payload.model)
+          if (model && model !== session.model) {
+            session.model = model
+            changed = true
+          }
+          if (changed) {
+            session.updatedAt = Date.now()
+            out.push(ev("session.updated", { sessionID: session.id, agent: session.agent, model: session.model }))
+          }
+        }
+        return out
+      }
+
       case "session.inbox.enqueued": {
         if (this.isChild(payload.sessionID)) return out
         if (payload.item && payload.item.type === "user") {
@@ -211,6 +289,19 @@ export class ActivityModel {
             session.updatedAt = Date.now()
           }
           out.push(ev("prompt.submitted", { sessionID: payload.sessionID, text }))
+        }
+        return out
+      }
+
+      // Force an idle phase without emitting a completion (used right after we
+      // create an empty session, which OpenCode reports as created but idle).
+      case "session.idle.silent": {
+        const session = this.ensureSession(payload.sessionID)
+        if (session) {
+          session.phase = "completed"
+          session.currentTool = null
+          session.updatedAt = Date.now()
+          out.push(ev("session.updated", { sessionID: session.id, phase: "completed" }))
         }
         return out
       }

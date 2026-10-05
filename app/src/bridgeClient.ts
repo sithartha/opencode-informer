@@ -23,6 +23,29 @@ export function promptUrl(base: string): string {
   return `${base}${CONTRACT.endpoints.prompt}`
 }
 
+export function sessionsUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.sessions}`
+}
+
+export function stopUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.stop}`
+}
+
+export function closeUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.close}`
+}
+
+export function optionsUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.options}`
+}
+
+export function switchUrl(base: string): string {
+  return `${base}${CONTRACT.endpoints.switch}`
+}
+
+export type ModelRef = { providerID: string; id: string; variant?: string; name?: string }
+export type SessionOptions = { agents: string[]; models: ModelRef[] }
+
 export function eventsUrl(base: string): string {
   return `${base}${CONTRACT.endpoints.events}`
 }
@@ -91,6 +114,71 @@ export async function postPrompt(
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({ sessionID, text }),
+  })
+  if (res.status === 401) throw new Error("unauthorized")
+  return res.ok
+}
+
+export async function postStart(
+  base: string,
+  token: string,
+  title?: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<string | null> {
+  const res = await fetchImpl(sessionsUrl(base), {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(title ? { title } : {}),
+  })
+  if (res.status === 401) throw new Error("unauthorized")
+  if (!res.ok) return null
+  const body = (await res.json()) as { sessionID?: string }
+  return body.sessionID ?? ""
+}
+
+async function postSessionAction(
+  base: string,
+  token: string,
+  url: string,
+  sessionID: string,
+  fetchImpl: FetchLike,
+): Promise<boolean> {
+  const res = await fetchImpl(url, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ sessionID }),
+  })
+  if (res.status === 401) throw new Error("unauthorized")
+  return res.ok
+}
+
+export function postStop(base: string, token: string, sessionID: string, fetchImpl: FetchLike = fetch): Promise<boolean> {
+  return postSessionAction(base, token, stopUrl(base), sessionID, fetchImpl)
+}
+
+export function postClose(base: string, token: string, sessionID: string, fetchImpl: FetchLike = fetch): Promise<boolean> {
+  return postSessionAction(base, token, closeUrl(base), sessionID, fetchImpl)
+}
+
+export async function fetchOptions(base: string, token: string, fetchImpl: FetchLike = fetch): Promise<SessionOptions> {
+  const res = await fetchImpl(optionsUrl(base), { headers: authHeaders(token) })
+  if (res.status === 401) throw new Error("unauthorized")
+  if (!res.ok) return { agents: [], models: [] }
+  const body = (await res.json()) as { agents?: string[]; models?: ModelRef[] }
+  return { agents: body.agents ?? [], models: body.models ?? [] }
+}
+
+export async function postSwitch(
+  base: string,
+  token: string,
+  sessionID: string,
+  target: { agent?: string; model?: ModelRef },
+  fetchImpl: FetchLike = fetch,
+): Promise<boolean> {
+  const res = await fetchImpl(switchUrl(base), {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ sessionID, ...target }),
   })
   if (res.status === 401) throw new Error("unauthorized")
   return res.ok

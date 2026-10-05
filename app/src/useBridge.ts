@@ -4,7 +4,8 @@ import Constants from "expo-constants"
 import * as Notifications from "expo-notifications"
 import { applyEvent, emptyState, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
 import { connectionReducer, initialConnection } from "./connection"
-import { beginPairing, baseUrl, fetchState, pollPairing, postPrompt, postResolution } from "./bridgeClient"
+import { beginPairing, baseUrl, fetchState, pollPairing, postPrompt, postResolution, type ModelRef, type SessionOptions } from "./bridgeClient"
+import * as sessionActions from "./sessionActions"
 import { BleClient } from "./bleClient"
 import { BridgeStream } from "./sse"
 import {
@@ -293,8 +294,69 @@ export function useBridge() {
     }
   }, [])
 
-  const resolve = useCallback(async (requestID: string, action: string) => {
+  const startSession = useCallback(async (title?: string) => {
     const base = baseRef.current
+    const token = tokenRef.current
+    if (!base || !token) return false
+    try {
+      return await sessionActions.startSession(base, token, syncState, title)
+    } catch {
+      return false
+    }
+  }, [])
+
+  const stopSession = useCallback(async (sessionID: string) => {
+    const base = baseRef.current
+    const token = tokenRef.current
+    if (!base || !token) return false
+    try {
+      return await sessionActions.stopSession(base, token, syncState, sessionID)
+    } catch {
+      return false
+    }
+  }, [])
+
+  const closeSession = useCallback(async (sessionID: string) => {
+    const base = baseRef.current
+    const token = tokenRef.current
+    if (!base || !token) return false
+    // Remove locally so the card disappears immediately, then reconcile.
+    setAppState((prev) => {
+      if (!prev.sessions[sessionID]) return prev
+      const sessions = { ...prev.sessions }
+      delete sessions[sessionID]
+      return { ...prev, sessions }
+    })
+    try {
+      return await sessionActions.closeSession(base, token, syncState, sessionID)
+    } catch {
+      return false
+    }
+  }, [])
+
+  const switchSession = useCallback(async (sessionID: string, target: { agent?: string; model?: ModelRef }) => {
+    const base = baseRef.current
+    const token = tokenRef.current
+    if (!base || !token) return false
+    try {
+      return await sessionActions.switchSession(base, token, syncState, sessionID, target)
+    } catch {
+      return false
+    }
+  }, [])
+
+  const loadOptions = useCallback(async (): Promise<SessionOptions> => {
+    const base = baseRef.current
+    const token = tokenRef.current
+    if (!base || !token) return { agents: [], models: [] }
+    try {
+      return await sessionActions.loadOptions(base, token)
+    } catch {
+      return { agents: [], models: [] }
+    }
+  }, [])
+
+  const resolve = useCallback(async (requestID: string, action: string) => {    const base = baseRef.current
     const token = tokenRef.current
     if (!base || !token) return false
     if (resolvingRef.current.has(requestID)) return false
@@ -405,5 +467,5 @@ export function useBridge() {
     }
   }, [connect, connectManual, resolve, refresh])
 
-  return { appState, connection, paired, connect, connectManual, resolve, sendPrompt, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, themeMode, setThemeMode }
+  return { appState, connection, paired, connect, connectManual, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, themeMode, setThemeMode }
 }

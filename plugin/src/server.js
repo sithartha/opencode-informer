@@ -1,7 +1,17 @@
 import http from "node:http"
 import { URL } from "node:url"
+import { appendFileSync } from "node:fs"
 
 const MAX_BODY = 64 * 1024
+const DEBUG_FILE = "/tmp/open-island-mobile-debug.log"
+
+function logHttp(method, path) {
+  try {
+    appendFileSync(DEBUG_FILE, `[${new Date().toISOString()}] http ${method} ${path}\n`)
+  } catch {
+    /* ignore */
+  }
+}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -34,7 +44,7 @@ function parseJSON(text) {
 }
 
 // Minimal HTTP + SSE server for the LAN API. Only node:* modules are used.
-export function createBridgeServer({ port, host, pairing, model, resolution, keepaliveMs = 15000, sendPrompt }) {
+export function createBridgeServer({ port, host, pairing, model, resolution, keepaliveMs = 15000, sendPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession }) {
   const sseClients = new Set()
   let keepaliveTimer = null
 
@@ -149,9 +159,63 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
     }
   }
 
+  async function handleStart(req, res) {
+    const body = parseJSON(await readBody(req))
+    if (typeof startSession !== "function") return sendJSON(res, 409, { status: "unavailable" })
+    try {
+      const title = typeof body.title === "string" && body.title.trim() ? body.title : undefined
+      const session = await startSession({ title })
+      const sessionID = session && (session.id || session.sessionID)
+      return sendJSON(res, 200, { status: "accepted", ...(sessionID ? { sessionID } : {}) })
+    } catch (err) {
+      return sendJSON(res, 409, { status: "not_applied", reason: String((err && err.message) || "error") })
+    }
+  }
+
+  async function handleSessionAction(req, res, applier) {
+    const body = parseJSON(await readBody(req))
+    const sessionID = String(body.sessionID || "")
+    if (!sessionID) return sendJSON(res, 400, { error: "sessionID is required" })
+    if (typeof applier !== "function") return sendJSON(res, 409, { status: "unavailable" })
+    try {
+      await applier({ sessionID })
+      return sendJSON(res, 200, { status: "accepted" })
+    } catch (err) {
+      return sendJSON(res, 409, { status: "not_applied", reason: String((err && err.message) || "error") })
+    }
+  }
+
+  async function handleOptions(_req, res) {
+    if (typeof optionsProvider !== "function") return sendJSON(res, 409, { status: "unavailable" })
+    try {
+      const options = (await optionsProvider()) || {}
+      return sendJSON(res, 200, { status: "accepted", agents: options.agents || [], models: options.models || [] })
+    } catch (err) {
+      return sendJSON(res, 409, { status: "not_applied", reason: String((err && err.message) || "error") })
+    }
+  }
+
+  async function handleSwitch(req, res) {
+    const body = parseJSON(await readBody(req))
+    const sessionID = String(body.sessionID || "")
+    const agent = typeof body.agent === "string" && body.agent ? body.agent : undefined
+    const model = body.model && typeof body.model === "object" ? body.model : undefined
+    if (!sessionID || (!agent && !model)) {
+      return sendJSON(res, 400, { error: "sessionID and agent or model are required" })
+    }
+    if (typeof switchSession !== "function") return sendJSON(res, 409, { status: "unavailable" })
+    try {
+      await switchSession({ sessionID, agent, model })
+      return sendJSON(res, 200, { status: "accepted" })
+    } catch (err) {
+      return sendJSON(res, 409, { status: "not_applied", reason: String((err && err.message) || "error") })
+    }
+  }
+
   async function route(req, res) {
     const url = new URL(req.url || "/", "http://localhost")
     const path = url.pathname
+    if (process.env.OPEN_ISLAND_MOBILE_DEBUG) logHttp(req.method, path)
 
     if (process.env.OPEN_ISLAND_MOBILE_DEBUG) {
       try {
@@ -177,6 +241,11 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
     if (req.method === "GET" && path === "/events") return openStream(req, res)
     if (req.method === "POST" && path === "/resolution") return handleResolution(req, res)
     if (req.method === "POST" && path === "/prompt") return handlePrompt(req, res)
+    if (req.method === "POST" && path === "/sessions") return handleStart(req, res)
+    if (req.method === "POST" && path === "/stop") return handleSessionAction(req, res, stopSession)
+    if (req.method === "POST" && path === "/close") return handleSessionAction(req, res, closeSession)
+    if (req.method === "GET" && path === "/options") return handleOptions(req, res)
+    if (req.method === "POST" && path === "/switch") return handleSwitch(req, res)
     return sendJSON(res, 404, { error: "not found" })
   }
 

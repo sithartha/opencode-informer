@@ -297,3 +297,65 @@ test("form.created flags a custom field as free-form", () => {
   assert.equal(asked.data.allowFreeform, true)
   assert.deepEqual(asked.data.options, [])
 })
+
+test("session.step.started records the agent and model", () => {
+  const model = new ActivityModel()
+  const out = apply(model, [
+    created("ses_1"),
+    {
+      type: "session.step.started",
+      data: { sessionID: "ses_1", agent: "build", model: { providerID: "deepseek", id: "deepseek-flash", variant: "default" } },
+    },
+  ])
+  const updated = out.find((e) => e.type === "session.updated")
+  assert.deepEqual(updated.data, { sessionID: "ses_1", agent: "build", model: "deepseek/deepseek-flash" })
+  const snap = model.snapshot().sessions[0]
+  assert.equal(snap.agent, "build")
+  assert.equal(snap.model, "deepseek/deepseek-flash")
+})
+
+test("switching agent and model emits session.updated with the new values", () => {
+  const model = new ActivityModel()
+  apply(model, [
+    created("ses_1"),
+    { type: "session.step.started", data: { sessionID: "ses_1", agent: "build", model: { providerID: "deepseek", id: "deepseek-flash" } } },
+    { type: "session.step.started", data: { sessionID: "ses_1", agent: "plan", model: { providerID: "anthropic", id: "claude", variant: "high" } } },
+  ])
+  const snap = model.snapshot().sessions[0]
+  assert.equal(snap.agent, "plan")
+  assert.equal(snap.model, "anthropic/claude#high")
+})
+
+test("session.deleted removes the session from the snapshot", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_1")])
+  apply(model, [{ type: "session.deleted", data: { sessionID: "ses_1" } }])
+  assert.equal(model.snapshot().sessions.length, 0)
+  assert.equal(model.activeSessionCount(), 0)
+})
+
+test("session.title sets the title and emits session.updated", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_1")])
+  const out = apply(model, [{ type: "session.title", data: { sessionID: "ses_1", title: "Add a health endpoint" } }])
+  assert.deepEqual(out, [{ type: "session.updated", data: { sessionID: "ses_1", title: "Add a health endpoint" } }])
+  assert.equal(model.snapshot().sessions[0].title, "Add a health endpoint")
+})
+
+test("session.idle.silent marks the session completed without a completion event", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_1")])
+  const out = apply(model, [{ type: "session.idle.silent", data: { sessionID: "ses_1" } }])
+  assert.deepEqual(out, [{ type: "session.updated", data: { sessionID: "ses_1", phase: "completed" } }])
+  assert.equal(model.snapshot().sessions[0].phase, "completed")
+})
+
+test("session.meta applies an agent/model switch immediately", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_1")])
+  const out = apply(model, [{ type: "session.meta", data: { sessionID: "ses_1", agent: "plan", model: { providerID: "deepseek", id: "deepseek-flash" } } }])
+  assert.deepEqual(out, [{ type: "session.updated", data: { sessionID: "ses_1", agent: "plan", model: "deepseek/deepseek-flash" } }])
+  const snap = model.snapshot().sessions[0]
+  assert.equal(snap.agent, "plan")
+  assert.equal(snap.model, "deepseek/deepseek-flash")
+})

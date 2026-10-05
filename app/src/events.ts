@@ -2,7 +2,9 @@ import type { Phase, StreamEventType } from "./contract"
 
 export interface Session {
   id: string
+  title?: string
   agent: string
+  model?: string
   cwd: string
   phase: Phase
   currentTool: string | null
@@ -89,7 +91,7 @@ export function applyEvent(state: AppState, event: ActivityEvent): AppState {
         id: sessionID!,
         agent: data.agent ?? "opencode",
         cwd: data.cwd ?? "",
-        phase: "running",
+        phase: (data.phase as Phase) ?? "running",
         currentTool: null,
         lastActivity: "Session started",
         subagents: 0,
@@ -154,6 +156,20 @@ export function applyEvent(state: AppState, event: ActivityEvent): AppState {
       const session = sessions[sessionID!]
       if (session) {
         sessions[sessionID!] = { ...session, lastActivity: String(data.text ?? session.lastActivity), updatedAt: Date.now() }
+      }
+      break
+    }
+    case "session.updated": {
+      const session = sessions[sessionID!]
+      if (session) {
+        sessions[sessionID!] = {
+          ...session,
+          title: data.title != null ? String(data.title) : session.title,
+          agent: data.agent != null ? String(data.agent) : session.agent,
+          model: data.model != null ? String(data.model) : session.model,
+          phase: data.phase != null ? (String(data.phase) as Phase) : session.phase,
+          updatedAt: Date.now(),
+        }
       }
       break
     }

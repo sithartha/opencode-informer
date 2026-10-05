@@ -90,8 +90,16 @@ BLE protocol, bridge client, contract parity) is unit-tested without a device:
 The dashboard lists one card per active session:
 
 - the phase (working / waiting for approval / waiting for answer / completed), the current tool, the number of subagents, and the number of active shells;
-- a compact summary of the session's latest activity (`lastActivity`, updated live by the `session.activity` stream event);
+- the session's **agent (mode)** and **model**, e.g. `build · deepseek/deepseek-flash` (from the `session.updated` stream event);
+- a compact summary of the session's latest activity (`lastActivity`, updated live by the `session.activity` stream event); http(s) URLs in the text are tappable and open in the browser;
 - any pending permission or question for that session, inline, with Allow / Deny or the question's options (at most one pending per session; a new request supersedes the previous).
+
+Controls on each card:
+
+- **+** beside the hero count starts a new, empty OpenCode session (then type its first prompt in the card);
+- **Stop** on a running card asks for confirmation, then stops the current turn and leaves the session inactive with a prompt field (`POST /stop`);
+- **×** (top-right) asks for confirmation, then closes the session (`POST /close`);
+- tapping the agent/model chip opens a picker populated from `GET /options` (the modes and models OpenCode reports — arbitrary and configurable), and switching applies via `POST /switch`.
 
 Pending requests are reconstructed from `GET /state` (the snapshot includes them), so a session that was already waiting when the app was closed still shows its pending request after a reconnect or a doorbell wake.
 

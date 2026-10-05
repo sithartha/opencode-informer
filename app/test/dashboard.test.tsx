@@ -1,5 +1,6 @@
 import { fireEvent, render } from "@testing-library/react-native"
-import { HeroCard, NeedsAttentionCard, SessionCard } from "../src/components"
+import { Linking } from "react-native"
+import { ConfirmModal, HeroCard, LinkText, NeedsAttentionCard, SessionCard, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
 import { createStyles } from "../src/styles"
 import { darkTheme, lightTheme } from "../src/theme"
@@ -190,5 +191,121 @@ describe("DemoScreen", () => {
 
     await fireEvent.press(getByText("New question"))
     expect(getByText("Ship this change?")).toBeTruthy()
+  })
+})
+
+describe("hero start control", () => {
+  it("calls onStart when + is pressed", async () => {
+    const onStart = jest.fn()
+    const { getByLabelText } = await render(
+      <HeroCard agg={{ total: 2, running: 2, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }} theme={lightTheme} styles={styles} onStart={onStart} />,
+    )
+    await fireEvent.press(getByLabelText("Start a new session"))
+    expect(onStart).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("session controls", () => {
+  it("shows the agent and model label", async () => {
+    const { getByText } = await render(
+      <SessionCard session={session({ agent: "build", model: "deepseek/deepseek-flash" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />,
+    )
+    expect(getByText("build · deepseek/deepseek-flash")).toBeTruthy()
+  })
+
+  it("shows Stop only while running and calls onStop", async () => {
+    const onStop = jest.fn()
+    const running = await render(<SessionCard session={session({ phase: "running" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} onStop={onStop} />)
+    await fireEvent.press(running.getByText("Stop"))
+    expect(onStop).toHaveBeenCalledWith("s1")
+
+    const done = await render(<SessionCard session={session({ phase: "completed" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} onStop={onStop} />)
+    expect(done.queryByText("Stop")).toBeNull()
+  })
+
+  it("calls onClose when the close control is pressed", async () => {
+    const onClose = jest.fn()
+    const { getByLabelText } = await render(<SessionCard session={session()} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} onClose={onClose} />)
+    await fireEvent.press(getByLabelText("Close session"))
+    expect(onClose).toHaveBeenCalledWith("s1")
+  })
+
+  it("offers a prompt field for an empty session", async () => {
+    const { getByPlaceholderText } = await render(
+      <SessionCard session={session({ phase: "completed", lastActivity: "" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} onSendPrompt={jest.fn()} />,
+    )
+    expect(getByPlaceholderText("Send a prompt")).toBeTruthy()
+  })
+})
+
+describe("ConfirmModal", () => {
+  it("confirms and cancels", async () => {
+    const onConfirm = jest.fn()
+    const onCancel = jest.fn()
+    const { getByText } = await render(<ConfirmModal visible title="Stop this session?" onConfirm={onConfirm} onCancel={onCancel} theme={lightTheme} styles={styles} />)
+    await fireEvent.press(getByText("Confirm"))
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+    await fireEvent.press(getByText("Cancel"))
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("LinkText", () => {
+  it("opens a URL and leaves plain text alone", async () => {
+    const spy = jest.spyOn(Linking, "openURL").mockResolvedValue(true as never)
+    const { getByText } = await render(<LinkText styles={styles} text="see https://expo.dev/docs now" />)
+    await fireEvent.press(getByText("https://expo.dev/docs"))
+    expect(spy).toHaveBeenCalledWith("https://expo.dev/docs")
+    spy.mockRestore()
+  })
+})
+
+describe("SwitcherModal", () => {
+  it("renders arbitrary agent names and reports selections", async () => {
+    const onSelectAgent = jest.fn()
+    const onSelectModel = jest.fn()
+    const { getByText } = await render(
+      <SwitcherModal
+        visible
+        agents={["build", "Reviewer"]}
+        models={[{ providerID: "deepseek", id: "deepseek-flash" }]}
+        onSelectAgent={onSelectAgent}
+        onSelectModel={onSelectModel}
+        onClose={() => {}}
+        theme={lightTheme}
+        styles={styles}
+      />,
+    )
+    expect(getByText("Reviewer")).toBeTruthy()
+    await fireEvent.press(getByText("Reviewer"))
+    expect(onSelectAgent).toHaveBeenCalledWith("Reviewer")
+    await fireEvent.press(getByText("deepseek/deepseek-flash"))
+    expect(onSelectModel).toHaveBeenCalledWith({ providerID: "deepseek", id: "deepseek-flash" })
+  })
+})
+
+describe("DemoScreen controls", () => {
+  it("stops a running session and closes a card", async () => {
+    const { getAllByText, getAllByLabelText, queryByText } = await render(
+      <DemoScreen onClose={() => {}} onOpenGallery={() => {}} theme={lightTheme} styles={styles} />,
+    )
+    await fireEvent.press(getAllByText("Stop")[0])
+    expect(queryByText("Stop")).toBeNull()
+
+    const closes = getAllByLabelText("Close session")
+    await fireEvent.press(closes[closes.length - 1])
+    expect(queryByText("Database choice")).toBeNull()
+  })
+})
+
+describe("session title", () => {
+  it("names the card with the session title and falls back to the cwd", async () => {
+    const titled = await render(
+      <SessionCard session={session({ title: "Add a health endpoint", cwd: "/Users/dev/api" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />,
+    )
+    expect(titled.getByText("Add a health endpoint")).toBeTruthy()
+
+    const fallback = await render(<SessionCard session={session({ cwd: "/Users/dev/api" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />)
+    expect(fallback.getByText("/Users/dev/api")).toBeTruthy()
   })
 })

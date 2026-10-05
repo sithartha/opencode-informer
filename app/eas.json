@@ -18,8 +18,8 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "REPLACE_WITH_YOUR_APPLE_ID",
-        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID",
+        "appleId": "psitharta@gmail.com",
+        "ascAppId": "6819440186",
         "appleTeamId": "6R3Q9WJ93G"
       }
     }

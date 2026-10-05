@@ -8,7 +8,12 @@
     "status": "/status",
     "events": "/events",
     "resolution": "/resolution",
-    "prompt": "/prompt"
+    "prompt": "/prompt",
+    "sessions": "/sessions",
+    "stop": "/stop",
+    "close": "/close",
+    "options": "/options",
+    "switch": "/switch"
   },
   "phases": ["running", "waiting-permission", "waiting-answer", "completed", "ended"],
   "streamEvents": [
@@ -21,6 +26,7 @@
     "question.asked",
     "turn.completed",
     "session.activity",
+    "session.updated",
     "actionable.resolved"
   ],
   "doorbellKinds": ["permission", "question", "completion", "pairing"],
@@ -32,7 +38,7 @@
   },
   "schemas": {
     "state": { "required": ["activeSessionCount", "sessions", "pending"] },
-    "session": { "required": ["id", "agent", "cwd", "phase", "currentTool", "lastActivity", "subagents", "shells", "updatedAt"] },
+    "session": { "required": ["id", "title", "agent", "model", "cwd", "phase", "currentTool", "lastActivity", "subagents", "shells", "updatedAt"] },
     "pending": { "required": ["requestID", "sessionID", "kind", "title"] },
     "session.started": { "required": ["sessionID", "agent", "cwd"] },
     "session.ended": { "required": ["sessionID"] },
@@ -43,6 +49,7 @@
     "question.asked": { "required": ["sessionID", "requestID", "title", "options"] },
     "turn.completed": { "required": ["sessionID", "summary"] },
     "session.activity": { "required": ["sessionID", "text"] },
+    "session.updated": { "required": ["sessionID"] },
     "actionable.resolved": { "required": ["sessionID", "requestID"] },
     "resolution.request": { "required": ["requestID", "action"] },
     "doorbell": { "required": ["kind"] },
@@ -57,7 +64,9 @@
         "sessions": [
           {
             "id": "ses_1",
+            "title": "Add a health endpoint",
             "agent": "opencode",
+            "model": "deepseek/deepseek-flash",
             "cwd": "/Users/dev/project",
             "phase": "running",
             "currentTool": "Bash",
@@ -77,7 +86,9 @@
         "sessions": [
           {
             "id": "ses_1",
+            "title": "Add a health endpoint",
             "agent": "opencode",
+            "model": "deepseek/deepseek-flash",
             "cwd": "/Users/dev/project",
             "phase": "waiting-permission",
             "currentTool": null,
@@ -134,6 +145,10 @@
     "session.activity": {
       "schema": "session.activity",
       "value": { "sessionID": "ses_1", "text": "Running the test suite" }
+    },
+    "session.updated": {
+      "schema": "session.updated",
+      "value": { "sessionID": "ses_1", "title": "Add a health endpoint", "agent": "build", "model": "deepseek/deepseek-flash" }
     },
     "actionable.resolved": {
       "schema": "actionable.resolved",

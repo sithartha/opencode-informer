@@ -1,10 +1,10 @@
 import { useRef, useState, type ReactNode } from "react"
-import { Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle } from "react-native"
+import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import type { PendingRequest, Session } from "./events"
 import type { Aggregate } from "./aggregate"
 import type { Theme } from "./theme"
-import { FadeIn, GlowDot, GradientSurface, PressableScale } from "./ui"
+import { FadeIn, GlowDot, GradientGlowButton, GradientSurface, PressableScale } from "./ui"
 import type { Styles } from "./styles"
 
 export const PHASE_COLORS: Record<string, string> = {
@@ -83,6 +83,40 @@ export function InlineInput({
   )
 }
 
+const URL_RE = /(https?:\/\/[^\s]+)/g
+
+function isLink(part: string): boolean {
+  return /^https?:\/\//.test(part)
+}
+
+/** Renders text with http(s) URLs as tappable links that open in the browser. */
+export function LinkText({
+  text,
+  style,
+  numberOfLines,
+  styles,
+}: {
+  text: string
+  style?: StyleProp<TextStyle>
+  numberOfLines?: number
+  styles: Styles
+}) {
+  const parts = text.split(URL_RE)
+  return (
+    <Text style={style} numberOfLines={numberOfLines}>
+      {parts.map((part, index) =>
+        isLink(part) ? (
+          <Text key={index} style={styles.link} onPress={() => void Linking.openURL(part)}>
+            {part}
+          </Text>
+        ) : (
+          <Text key={index}>{part}</Text>
+        ),
+      )}
+    </Text>
+  )
+}
+
 export function ExpandableText({
   text,
   style,
@@ -100,9 +134,7 @@ export function ExpandableText({
   const canExpand = text.length > threshold
   return (
     <TouchableOpacity activeOpacity={canExpand ? 0.7 : 1} onPress={() => canExpand && setExpanded((value) => !value)}>
-      <Text style={style} numberOfLines={expanded ? undefined : numberOfLines}>
-        {text}
-      </Text>
+      <LinkText text={text} style={style} numberOfLines={expanded ? undefined : numberOfLines} styles={styles} />
       {canExpand ? <Text style={styles.moreLink}>{expanded ? "less" : "more"}</Text> : null}
     </TouchableOpacity>
   )
@@ -165,7 +197,7 @@ export function PendingActions({
   )
 }
 
-export function HeroCard({ agg, theme, styles }: { agg: Aggregate; theme: Theme; styles: Styles }) {
+export function HeroCard({ agg, theme, styles, onStart }: { agg: Aggregate; theme: Theme; styles: Styles; onStart?: () => void }) {
   const hasPermission = agg.waitingApproval > 0
   const hasQuestion = agg.waitingAnswer > 0
   const needsYou = hasPermission || hasQuestion
@@ -183,7 +215,21 @@ export function HeroCard({ agg, theme, styles }: { agg: Aggregate; theme: Theme;
       innerStyle={{ backgroundColor: theme.surface }}
     >
       <View style={styles.heroInner}>
-        <Text style={styles.heroCount}>{agg.total}</Text>
+        <View style={styles.heroCountRow}>
+          <Text style={styles.heroCount}>{agg.total}</Text>
+          {onStart ? (
+            <GradientGlowButton
+              colors={["#8A6BFF", "#5AA9FF", "#FF7AD9", "#8A6BFF"]}
+              onPress={onStart}
+              accessibilityLabel="Start a new session"
+            >
+              <View style={styles.sparkleWrap}>
+                <Text style={styles.sparkleMain}>✦</Text>
+                <Text style={styles.sparkleMini}>✦</Text>
+              </View>
+            </GradientGlowButton>
+          ) : null}
+        </View>
         <Text style={styles.heroLabel}>active {agg.total === 1 ? "agent" : "agents"}</Text>
         <View style={styles.heroBreakdown}>
           <View style={styles.heroStat}>
@@ -210,6 +256,117 @@ export function HeroCard({ agg, theme, styles }: { agg: Aggregate; theme: Theme;
   )
 }
 
+export function ConfirmModal({
+  visible,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  onConfirm,
+  onCancel,
+  theme,
+  styles,
+}: {
+  visible: boolean
+  title: string
+  message?: string
+  confirmLabel?: string
+  onConfirm: () => void
+  onCancel: () => void
+  theme: Theme
+  styles: Styles
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.confirmBackdrop}>
+        <View style={[styles.confirmCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={styles.confirmTitle}>{title}</Text>
+          {message ? <Text style={styles.confirmMessage}>{message}</Text> : null}
+          <View style={styles.confirmActions}>
+            <PressableScale onPress={onCancel} accessibilityLabel="Cancel">
+              <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
+                <Text style={[styles.actionText, { color: theme.text }]}>Cancel</Text>
+              </View>
+            </PressableScale>
+            <PressableScale onPress={onConfirm} accessibilityLabel={confirmLabel}>
+              <View style={[styles.actionInner, { backgroundColor: theme.deny }]}>
+                <Text style={styles.actionText}>{confirmLabel}</Text>
+              </View>
+            </PressableScale>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+export function SwitcherModal({
+  visible,
+  agents,
+  models,
+  currentAgent,
+  currentModel,
+  onSelectAgent,
+  onSelectModel,
+  onClose,
+  theme,
+  styles,
+}: {
+  visible: boolean
+  agents: string[]
+  models: { providerID: string; id: string; name?: string }[]
+  currentAgent?: string
+  currentModel?: string
+  onSelectAgent: (agent: string) => void
+  onSelectModel: (model: { providerID: string; id: string }) => void
+  onClose: () => void
+  theme: Theme
+  styles: Styles
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.confirmBackdrop}>
+        <View style={[styles.confirmCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={styles.confirmTitle}>Mode &amp; model</Text>
+          <ScrollView style={styles.switcherScroll}>
+            <Text style={styles.section}>Mode</Text>
+            {agents.length === 0 ? (
+              <Text style={styles.empty}>No modes reported</Text>
+            ) : (
+              agents.map((agent) => (
+                <TouchableOpacity key={agent} style={styles.switcherItem} onPress={() => onSelectAgent(agent)}>
+                  <Text style={[styles.switcherItemText, agent === currentAgent ? { color: theme.accent } : null]}>{agent}</Text>
+                  {agent === currentAgent ? <Text style={styles.switcherCheck}>✓</Text> : null}
+                </TouchableOpacity>
+              ))
+            )}
+            <Text style={styles.section}>Model</Text>
+            {models.length === 0 ? (
+              <Text style={styles.empty}>No models reported</Text>
+            ) : (
+              models.map((model) => {
+                const label = `${model.providerID}/${model.id}`
+                return (
+                  <TouchableOpacity key={label} style={styles.switcherItem} onPress={() => onSelectModel({ providerID: model.providerID, id: model.id })}>
+                    <Text style={[styles.switcherItemText, label === currentModel ? { color: theme.accent } : null]}>{label}</Text>
+                    {label === currentModel ? <Text style={styles.switcherCheck}>✓</Text> : null}
+                  </TouchableOpacity>
+                )
+              })
+            )}
+          </ScrollView>
+          <View style={styles.confirmActions}>
+            <PressableScale onPress={onClose} accessibilityLabel="Done">
+              <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
+                <Text style={[styles.actionText, { color: theme.text }]}>Done</Text>
+              </View>
+            </PressableScale>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export function SessionCard({
   session,
   requests,
@@ -218,6 +375,9 @@ export function SessionCard({
   styles,
   onFieldFocus,
   onSendPrompt,
+  onStop,
+  onClose,
+  onOpenSwitcher,
 }: {
   session: Session
   requests: PendingRequest[]
@@ -226,6 +386,9 @@ export function SessionCard({
   styles: Styles
   onFieldFocus?: (y: number, h: number) => void
   onSendPrompt?: (sessionID: string, text: string) => void
+  onStop?: (sessionID: string) => void
+  onClose?: (sessionID: string) => void
+  onOpenSwitcher?: (session: Session) => void
 }) {
   const request = requests[0]
   const isQuestion = request?.kind === "question"
@@ -247,9 +410,29 @@ export function SessionCard({
         <View style={styles.sessionHeader}>
           <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={9} pulse={session.phase === "running"} />
           <Text style={styles.sessionTitle} numberOfLines={1}>
-            {session.cwd || session.id}
+            {session.title || session.cwd || session.id}
           </Text>
+          {session.phase === "running" && onStop ? (
+            <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
+              <View style={styles.stopButton}>
+                <Text style={styles.stopButtonText}>Stop</Text>
+              </View>
+            </PressableScale>
+          ) : null}
           <Text style={styles.sessionPhase}>{session.phase}</Text>
+          {onClose ? (
+            <PressableScale onPress={() => onClose(session.id)} accessibilityLabel="Close session">
+              <Text style={styles.closeButton}>×</Text>
+            </PressableScale>
+          ) : null}
+        </View>
+        <View style={styles.metaRow}>
+          <PressableScale onPress={() => onOpenSwitcher?.(session)} accessibilityLabel="Change mode and model">
+            <Text style={styles.metaChip}>
+              {session.agent || "agent"}
+              {session.model ? ` · ${session.model}` : ""}
+            </Text>
+          </PressableScale>
         </View>
         <View style={styles.badges}>
           {session.currentTool ? <Text style={styles.badge}>tool · {session.currentTool}</Text> : null}

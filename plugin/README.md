@@ -28,15 +28,24 @@ All endpoints except `/pair` require `Authorization: Bearer <token>`.
 | `POST` | `/pair` | no | `{deviceName}` → `202 {approvalID, status:"pending"}`; with `{approvalID}` once approved → `200 {status:"approved", token}` |
 | `GET` | `/pair?approvalID=…` | no | `{status:"pending"\|"approved"\|"denied", token?}` |
 | `POST` | `/pair/decision` | loopback | helper records the user's `{approvalID, decision:"approve"\|"deny"}` |
-| `GET` | `/state` | yes | snapshot: `{activeSessionCount, sessions:[…]}` |
+| `GET` | `/state` | yes | snapshot: `{activeSessionCount, sessions:[…], pending:[…]}`; each session includes `agent` (mode) and `model` |
 | `GET` | `/status` | yes | `{connected, activeSessionCount}` |
 | `GET` | `/events` | yes | SSE activity stream (`event:` + `data:` per line) |
 | `POST` | `/resolution` | yes | `{requestID, action}` → `200 {status:"accepted"}` or `409 {status:"not_applicable", reason}` |
+| `POST` | `/prompt` | yes | `{sessionID, text}` → `200 {status:"accepted"}` or `409 {status:"failed"}` |
+| `POST` | `/sessions` | yes | `{title?}` → `200 {status:"accepted", sessionID?}` (starts a new session) |
+| `POST` | `/stop` | yes | `{sessionID}` → `200 {status:"accepted"}` (interrupts the current turn) or `409 {status:"not_applied"}` |
+| `POST` | `/close` | yes | `{sessionID}` → `200 {status:"accepted"}` (closes the session) or `409 {status:"not_applied"}` |
+| `GET` | `/options` | yes | discovered modes and models: `{status:"accepted", agents:[…], models:[{providerID, id, variant?}]}` |
+| `POST` | `/switch` | yes | `{sessionID, agent?, model?}` → `200 {status:"accepted"}` or `409 {status:"not_applied"}` |
 
 ### Activity stream events
 
 `session.started`, `session.ended`, `prompt.submitted`, `tool.started`, `tool.ended`,
-`permission.requested`, `question.asked`, `turn.completed`, `actionable.resolved`.
+`permission.requested`, `question.asked`, `turn.completed`, `session.activity`,
+`session.updated`, `actionable.resolved`.
+
+`session.updated` carries the session's `agent` and `model` when they change.
 
 Payload shapes are defined in `../contract/contract.json` (a copy of the fixtures).
 

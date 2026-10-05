@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { AccessibilityInfo, Animated, Dimensions, Easing, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native"
+import { AccessibilityInfo, Animated, Dimensions, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 
 /** Respect the system reduced-motion setting. */
@@ -247,9 +247,153 @@ export function GradientSurface({
   )
 }
 
-/** A small dot that breathes; static under reduced motion. */
-export function GlowDot({ color, size = 10, pulse = false }: { color: string; size?: number; pulse?: boolean }) {
+/** A round multi-color gradient button with a sweeping sheen and a breathing glow. */
+export function GradientGlowButton({
+  children,
+  colors,
+  onPress,
+  accessibilityLabel,
+  size = 44,
+}: {
+  children: ReactNode
+  colors: readonly [string, string, ...string[]]
+  onPress: () => void
+  accessibilityLabel?: string
+  size?: number
+}) {
   const reduce = useReducedMotion()
+  const sheen = useRef(new Animated.Value(0)).current
+  const glow = useRef(new Animated.Value(0.45)).current
+
+  useEffect(() => {
+    if (reduce) {
+      sheen.setValue(0.5)
+      glow.setValue(0.45)
+      return
+    }
+    const sweep = Animated.loop(
+      Animated.timing(sheen, {
+        toValue: 1,
+        duration: 2200,
+        delay: 600,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    )
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 0.85, duration: 1500, useNativeDriver: false }),
+        Animated.timing(glow, { toValue: 0.35, duration: 1500, useNativeDriver: false }),
+      ]),
+    )
+    sweep.start()
+    pulse.start()
+    return () => {
+      sweep.stop()
+      pulse.stop()
+    }
+  }, [reduce, sheen, glow])
+
+  return (
+    <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
+      <Animated.View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          shadowColor: colors[0],
+          shadowOffset: { width: 0, height: 0 },
+          shadowRadius: 14,
+          shadowOpacity: glow,
+          elevation: 10,
+        }}
+      >
+        <View style={{ flex: 1, borderRadius: size / 2, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
+          <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: -6,
+              bottom: -6,
+              width: 34,
+              transform: [
+                { translateX: sheen.interpolate({ inputRange: [0, 1], outputRange: [-60, size + 40] }) },
+                { rotate: "20deg" },
+              ],
+            }}
+          >
+            <LinearGradient
+              colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.75)", "rgba(255,255,255,0)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{ flex: 1 }}
+            />
+          </Animated.View>
+          {children}
+        </View>
+      </Animated.View>
+    </PressableScale>
+  )
+}
+
+/** A round button with a breathing colored halo; static under reduced motion. */
+export function GlowIconButton({
+  label,
+  color,
+  onPress,
+  accessibilityLabel,
+  size = 38,
+}: {
+  label: string
+  color: string
+  onPress: () => void
+  accessibilityLabel?: string
+  size?: number
+}) {
+  const reduce = useReducedMotion()
+  const glow = useRef(new Animated.Value(0.25)).current
+  useEffect(() => {
+    if (reduce) {
+      glow.setValue(0.3)
+      return
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 0.7, duration: 1400, useNativeDriver: false }),
+        Animated.timing(glow, { toValue: 0.2, duration: 1400, useNativeDriver: false }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [reduce, glow])
+
+  return (
+    <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
+      <Animated.View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          alignItems: "center",
+          justifyContent: "center",
+          borderWidth: 1.5,
+          borderColor: color,
+          shadowColor: color,
+          shadowOffset: { width: 0, height: 0 },
+          shadowRadius: 12,
+          shadowOpacity: glow,
+          elevation: 8,
+        }}
+      >
+        <Text style={{ color, fontSize: size * 0.62, fontWeight: "700", lineHeight: size * 0.68 }}>{label}</Text>
+      </Animated.View>
+    </PressableScale>
+  )
+}
+
+/** A small dot that breathes; static under reduced motion. */
+export function GlowDot({ color, size = 10, pulse = false }: { color: string; size?: number; pulse?: boolean }) {  const reduce = useReducedMotion()
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
     if (!pulse || reduce) return

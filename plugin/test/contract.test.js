@@ -21,6 +21,7 @@ test("the plugin emits exactly the contract's stream events", () => {
     "question.asked",
     "turn.completed",
     "session.activity",
+    "session.updated",
     "actionable.resolved",
   ]
   assert.deepEqual(emitted, contract.streamEvents)

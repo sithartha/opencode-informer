@@ -19,9 +19,11 @@ function seed(): AppState {
     state = applyEvent(state, { type, data })
   }
   at("session.started", { sessionID: "demo_api", cwd: "/Users/dev/api", agent: "opencode" })
+  at("session.updated", { sessionID: "demo_api", title: "Add a health endpoint", agent: "build", model: "deepseek/deepseek-flash" })
   at("tool.started", { sessionID: "demo_api", tool: "Bash" })
   at("session.activity", { sessionID: "demo_api", text: "Running the test suite for the API module" })
   at("session.started", { sessionID: "demo_web", cwd: "/Users/dev/web", agent: "opencode" })
+  at("session.updated", { sessionID: "demo_web", title: "Rework the checkout form", agent: "build", model: "deepseek/deepseek-flash" })
   at("tool.started", { sessionID: "demo_web", tool: "Edit" })
   at("permission.requested", {
     sessionID: "demo_web",
@@ -30,6 +32,7 @@ function seed(): AppState {
     summary: "rm -rf build/",
   })
   at("session.started", { sessionID: "demo_docs", cwd: "/Users/dev/docs", agent: "opencode" })
+  at("session.updated", { sessionID: "demo_docs", title: "Database choice", agent: "plan", model: "anthropic/claude" })
   at("question.asked", {
     sessionID: "demo_docs",
     requestID: "demo_q",
@@ -104,6 +107,23 @@ export function DemoScreen({
     })
   }
 
+  const stopOne = (sessionID: string) => {
+    setState((prev) => applyEvent(prev, { type: "turn.completed", data: { sessionID } }))
+  }
+
+  const closeOne = (sessionID: string) => {
+    setState((prev) => applyEvent(prev, { type: "session.ended", data: { sessionID } }))
+  }
+
+  const startOne = () => {
+    const id = `demo_${++demoCounter}`
+    setState((prev) => applyEvent(prev, { type: "session.started", data: { sessionID: id, cwd: `/Users/dev/new-${demoCounter}`, agent: "opencode" } }))
+  }
+
+  const promptOne = (sessionID: string, text: string) => {
+    setState((prev) => applyEvent(prev, { type: "prompt.submitted", data: { sessionID, text } }))
+  }
+
   return (
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -126,7 +146,7 @@ export function DemoScreen({
         </View>
 
         <FadeIn style={styles.heroWrap}>
-          <HeroCard agg={agg} theme={theme} styles={styles} />
+          <HeroCard agg={agg} theme={theme} styles={styles} onStart={startOne} />
         </FadeIn>
 
         <Text style={styles.section}>Simulate</Text>
@@ -139,7 +159,16 @@ export function DemoScreen({
         <Text style={styles.section}>Sessions</Text>
         {sessions.map((session, index) => (
           <FadeIn key={session.id} delay={index * 40} style={styles.cardGap}>
-            <SessionCard session={session} requests={pendingBySession[session.id] ?? []} resolve={resolve} theme={theme} styles={styles} />
+            <SessionCard
+              session={session}
+              requests={pendingBySession[session.id] ?? []}
+              resolve={resolve}
+              theme={theme}
+              styles={styles}
+              onStop={stopOne}
+              onClose={closeOne}
+              onSendPrompt={promptOne}
+            />
           </FadeIn>
         ))}
       </ScrollView>
