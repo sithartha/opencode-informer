@@ -102,13 +102,17 @@ async fn prepare(
                 async move {
                     tokio::spawn(async move {
                         // Publish the last doorbell first, then stream new ones.
-                        if let Some(bytes) = rx.borrow_and_update().clone() {
+                        // Bind the clone before awaiting so the `watch` read guard
+                        // (not `Send`) is dropped before the await.
+                        let latest = rx.borrow_and_update().clone();
+                        if let Some(bytes) = latest {
                             if notifier.notify(bytes).await.is_err() {
                                 return;
                             }
                         }
                         while rx.changed().await.is_ok() {
-                            if let Some(bytes) = rx.borrow_and_update().clone() {
+                            let latest = rx.borrow_and_update().clone();
+                            if let Some(bytes) = latest {
                                 if notifier.notify(bytes).await.is_err() {
                                     break;
                                 }
