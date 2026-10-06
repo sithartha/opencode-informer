@@ -20,6 +20,14 @@ export interface Snapshot {
   pending?: PendingRequest[]
 }
 
+export interface Question {
+  key: string
+  title: string
+  summary?: string
+  options: string[]
+  allowFreeform: boolean
+}
+
 export interface PendingRequest {
   requestID: string
   sessionID: string
@@ -28,6 +36,36 @@ export interface PendingRequest {
   summary?: string
   options?: string[]
   allowFreeform?: boolean
+  /** Every question of a form; a single question for a one-question form. */
+  questions?: Question[]
+}
+
+/** Parse the `questions` of a question.asked event, synthesizing one from the flat fields. */
+export function parseQuestions(data: Record<string, unknown>): Question[] {
+  const raw = Array.isArray(data.questions) ? data.questions : []
+  if (raw.length > 0) {
+    return raw.map((entry, index) => {
+      const question = (entry ?? {}) as Record<string, unknown>
+      const options = Array.isArray(question.options) ? question.options.map(String) : []
+      return {
+        key: question.key != null ? String(question.key) : `q${index}`,
+        title: String(question.title ?? question.summary ?? `Question ${index + 1}`),
+        summary: question.summary != null ? String(question.summary) : undefined,
+        options,
+        allowFreeform: question.allowFreeform === true || options.length === 0,
+      }
+    })
+  }
+  const options = Array.isArray(data.options) ? data.options.map(String) : []
+  return [
+    {
+      key: "q0",
+      title: String(data.title ?? "Question"),
+      summary: data.summary != null ? String(data.summary) : undefined,
+      options,
+      allowFreeform: data.allowFreeform === true || options.length === 0,
+    },
+  ]
 }
 
 export interface ActivityEvent {
@@ -137,14 +175,17 @@ export function applyEvent(state: AppState, event: ActivityEvent): AppState {
     }
     case "question.asked": {
       if (sessions[sessionID!]) sessions[sessionID!] = { ...sessions[sessionID!], phase: "waiting-answer", updatedAt: Date.now() }
+      const questions = parseQuestions(data)
+      const first = questions[0]
       pending[String(data.requestID)] = {
         requestID: String(data.requestID),
         sessionID: sessionID!,
         kind: "question",
-        title: String(data.title ?? "Question"),
-        summary: data.summary != null ? String(data.summary) : undefined,
-        options: Array.isArray(data.options) ? data.options.map(String) : [],
-        allowFreeform: data.allowFreeform === true,
+        title: first.title,
+        summary: first.summary,
+        options: first.options,
+        allowFreeform: first.allowFreeform,
+        questions,
       }
       break
     }

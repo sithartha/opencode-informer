@@ -139,7 +139,7 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
 
   async function handleResolution(req, res) {
     const body = parseJSON(await readBody(req))
-    const result = await resolution.resolve(body.requestID, body.action)
+    const result = await resolution.resolve(body.requestID, body.action, body.answers)
     if (result.applied) return sendJSON(res, 200, { status: "accepted" })
     return sendJSON(res, 409, { status: "not_applicable", reason: result.reason })
   }

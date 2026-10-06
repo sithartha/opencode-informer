@@ -298,6 +298,51 @@ test("form.created flags a custom field as free-form", () => {
   assert.deepEqual(asked.data.options, [])
 })
 
+test("form.created with several fields exposes every question", () => {
+  const model = new ActivityModel()
+  const out = apply(model, [
+    created("ses_1"),
+    {
+      type: "form.created",
+      data: {
+        sessionID: "ses_1",
+        form: {
+          id: "f2",
+          sessionID: "ses_1",
+          title: "Questions",
+          fields: [
+            {
+              key: "q0",
+              title: "Deploy target?",
+              options: [
+                { value: "staging", label: "Staging" },
+                { value: "prod", label: "Production" },
+              ],
+            },
+            { key: "q1", title: "Run migrations?", custom: true, options: [] },
+          ],
+        },
+      },
+    },
+  ])
+  const asked = out.find((e) => e.type === "question.asked")
+  assert.equal(asked.data.questions.length, 2)
+  assert.deepEqual(asked.data.questions[0], {
+    key: "q0",
+    title: "Deploy target?",
+    summary: undefined,
+    options: ["Staging", "Production"],
+    allowFreeform: false,
+  })
+  assert.equal(asked.data.questions[1].key, "q1")
+  assert.equal(asked.data.questions[1].allowFreeform, true)
+  // The flat fields mirror the first question for older clients.
+  assert.equal(asked.data.title, "Deploy target?")
+  assert.deepEqual(asked.data.options, ["Staging", "Production"])
+  // The snapshot carries every question so a reconnect can answer the whole form.
+  assert.equal(model.snapshot().pending[0].questions.length, 2)
+})
+
 test("session.step.started records the agent and model", () => {
   const model = new ActivityModel()
   const out = apply(model, [

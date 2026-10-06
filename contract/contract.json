@@ -46,12 +46,14 @@
     "tool.started": { "required": ["sessionID", "tool", "input"] },
     "tool.ended": { "required": ["sessionID", "tool"] },
     "permission.requested": { "required": ["sessionID", "requestID", "title", "summary", "agent"] },
-    "question.asked": { "required": ["sessionID", "requestID", "title", "options"] },
+    "question.asked": { "required": ["sessionID", "requestID", "title", "options", "questions"] },
+    "question": { "required": ["key", "title", "options", "allowFreeform"] },
     "turn.completed": { "required": ["sessionID", "summary"] },
     "session.activity": { "required": ["sessionID", "text"] },
     "session.updated": { "required": ["sessionID"] },
     "actionable.resolved": { "required": ["sessionID", "requestID"] },
     "resolution.request": { "required": ["requestID", "action"] },
+    "resolution.answers": { "required": ["requestID", "answers"] },
     "doorbell": { "required": ["kind"] },
     "pair.request": { "required": ["deviceName"] },
     "pair.status": { "required": ["status"] }
@@ -135,7 +137,25 @@
         "sessionID": "ses_1",
         "requestID": "req_2",
         "title": "Which database should I use?",
-        "options": ["PostgreSQL", "SQLite"]
+        "options": ["PostgreSQL", "SQLite"],
+        "allowFreeform": false,
+        "questions": [
+          { "key": "q0", "title": "Which database should I use?", "options": ["PostgreSQL", "SQLite"], "allowFreeform": false }
+        ]
+      }
+    },
+    "question.asked.multi": {
+      "schema": "question.asked",
+      "value": {
+        "sessionID": "ses_1",
+        "requestID": "req_3",
+        "title": "Deploy target?",
+        "options": ["Staging", "Production"],
+        "allowFreeform": false,
+        "questions": [
+          { "key": "q0", "title": "Deploy target?", "options": ["Staging", "Production"], "allowFreeform": false },
+          { "key": "q1", "title": "Run migrations?", "options": ["Yes", "No"], "allowFreeform": false }
+        ]
       }
     },
     "turn.completed": {
@@ -157,6 +177,10 @@
     "resolution.request": {
       "schema": "resolution.request",
       "value": { "requestID": "req_1", "action": "allow" }
+    },
+    "resolution.answers": {
+      "schema": "resolution.answers",
+      "value": { "requestID": "req_3", "answers": { "q0": "Staging", "q1": "Yes" } }
     },
     "doorbell.permission": {
       "schema": "doorbell",

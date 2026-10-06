@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { applyEvent, emptyState, parseSSE, stateFromSnapshot } from "../src/events"
+import { applyEvent, emptyState, parseQuestions, parseSSE, stateFromSnapshot } from "../src/events"
 
 test("parseSSE reassembles frames split across chunks", () => {
   const first = parseSSE("", "event: session.started\ndata: {\"sessionID\":\"a\"}\n\nevent: tool.st")
@@ -71,4 +71,57 @@ test("session.activity updates the session's last activity", () => {
   state = applyEvent(state, { type: "session.started", data: { sessionID: "s1" } })
   state = applyEvent(state, { type: "session.activity", data: { sessionID: "s1", text: "Running the tests" } })
   assert.equal(state.sessions.s1.lastActivity, "Running the tests")
+})
+
+test("parseQuestions synthesizes one question from the flat fields", () => {
+  const questions = parseQuestions({ title: "Which db?", options: ["Postgres", "SQLite"], allowFreeform: true })
+  assert.equal(questions.length, 1)
+  assert.equal(questions[0].key, "q0")
+  assert.equal(questions[0].title, "Which db?")
+  assert.deepEqual(questions[0].options, ["Postgres", "SQLite"])
+  assert.equal(questions[0].allowFreeform, true)
+})
+
+test("a multi-question form exposes every question on the pending request", () => {
+  let state = emptyState()
+  state = applyEvent(state, { type: "session.started", data: { sessionID: "s1" } })
+  state = applyEvent(state, {
+    type: "question.asked",
+    data: {
+      sessionID: "s1",
+      requestID: "q2",
+      title: "Deploy target?",
+      options: ["Staging", "Production"],
+      questions: [
+        { key: "q0", title: "Deploy target?", options: ["Staging", "Production"], allowFreeform: false },
+        { key: "q1", title: "Run migrations?", options: ["Yes", "No"], allowFreeform: false },
+      ],
+    },
+  })
+  assert.equal(state.pending.q2.questions?.length, 2)
+  assert.equal(state.pending.q2.questions?.[1].title, "Run migrations?")
+  // Flat fields mirror the first question for single-question UI paths.
+  assert.equal(state.pending.q2.title, "Deploy target?")
+  assert.deepEqual(state.pending.q2.options, ["Staging", "Production"])
+})
+
+test("stateFromSnapshot carries a multi-question form", () => {
+  const state = stateFromSnapshot({
+    activeSessionCount: 1,
+    sessions: [{ id: "s1", agent: "opencode", cwd: "/tmp", phase: "waiting-answer", currentTool: null, lastActivity: "", updatedAt: 0 }],
+    pending: [
+      {
+        requestID: "r2",
+        sessionID: "s1",
+        kind: "question",
+        title: "Deploy target?",
+        options: ["Staging"],
+        questions: [
+          { key: "q0", title: "Deploy target?", options: ["Staging"], allowFreeform: false },
+          { key: "q1", title: "Run migrations?", options: ["Yes", "No"], allowFreeform: false },
+        ],
+      },
+    ],
+  })
+  assert.equal(state.pending.r2.questions?.length, 2)
 })

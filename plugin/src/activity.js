@@ -30,16 +30,31 @@ function normalizeModel(model) {
   return model.variant && model.variant !== "default" ? `${base}#${model.variant}` : base
 }
 
-function questionOptions(form) {
-  const fields = Array.isArray(form && form.fields) ? form.fields : []
+function fieldOptions(field) {
   const options = []
-  for (const field of fields) {
-    for (const option of Array.isArray(field.options) ? field.options : []) {
-      const label = option && option.label != null ? option.label : option && option.value
-      if (label != null && !options.includes(String(label))) options.push(String(label))
-    }
+  for (const option of Array.isArray(field && field.options) ? field.options : []) {
+    const label = option && option.label != null ? option.label : option && option.value
+    if (label != null && !options.includes(String(label))) options.push(String(label))
   }
   return options
+}
+
+// One question per form field, each with its own prompt, options and free-form flag.
+// A field without a key gets a stable index-based key so answers still map back.
+function questionList(form) {
+  const fields = Array.isArray(form && form.fields) ? form.fields : []
+  return fields.map((field, index) => {
+    const options = fieldOptions(field)
+    const title = (field && (field.title || field.description)) || (field && field.key) || `Question ${index + 1}`
+    const summary = field && field.description && field.description !== title ? field.description : undefined
+    return {
+      key: (field && field.key) || `q${index}`,
+      title,
+      summary,
+      options,
+      allowFreeform: Boolean(field && field.custom) || options.length === 0,
+    }
+  })
 }
 
 // Open Island keeps one pending interaction per session; supersede any previous one
@@ -127,6 +142,7 @@ export class ActivityModel {
         summary: pending.summary,
         options: pending.options,
         allowFreeform: Boolean(pending.allowFreeform),
+        questions: pending.questions,
       })),
     }
   }
@@ -456,28 +472,34 @@ export class ActivityModel {
         const root = this.rootSession(form.sessionID || payload.sessionID)
         const session = this.ensureSession(root)
         const requestID = form.id
-        const fields = Array.isArray(form.fields) ? form.fields : []
-        const firstField = fields[0]
+        const questions = questionList(form)
+        const first = questions[0]
         // OpenCode puts the real question on the field; form.title is generic
-        // (e.g. "Questions"), so prefer the field's title/description.
-        const title =
-          (firstField && (firstField.title || firstField.description)) || form.title || (firstField && firstField.key) || "Question"
-        const options = questionOptions(form)
-        // A free-form field (custom) or an option-less field needs keyboard input.
-        const allowFreeform = Boolean(firstField && firstField.custom) || options.length === 0
-        const summary =
-          firstField && firstField.description && firstField.description !== title ? firstField.description : undefined
+        // (e.g. "Questions"), so prefer the first field's title/description.
+        const title = (first && first.title) || form.title || "Question"
+        const options = first ? first.options : []
+        const allowFreeform = first ? first.allowFreeform : true
+        const summary = first && first.summary
         if (requestID) {
           const removed = supersedeSessionPending(this.pending, root)
           for (const oldID of removed) out.push(ev("actionable.resolved", { sessionID: root, requestID: oldID }))
-          this.pending.set(requestID, { sessionID: root, kind: "question", title, summary, options, allowFreeform, fields: form.fields })
+          this.pending.set(requestID, {
+            sessionID: root,
+            kind: "question",
+            title,
+            summary,
+            options,
+            allowFreeform,
+            fields: form.fields,
+            questions,
+          })
         }
         if (session) {
           session.phase = "waiting-answer"
           session.lastActivity = title
           session.updatedAt = Date.now()
         }
-        out.push(ev("question.asked", { sessionID: root, requestID, title, summary, options, allowFreeform }))
+        out.push(ev("question.asked", { sessionID: root, requestID, title, summary, options, allowFreeform, questions }))
         return out
       }
 

@@ -117,6 +117,23 @@ export async function postResolution(
   return res.ok
 }
 
+/** Resolve a multi-question form with an answer for every question. */
+export async function postAnswers(
+  base: string,
+  token: string,
+  requestID: string,
+  answers: Record<string, string>,
+  fetchImpl: FetchLike = fetch,
+): Promise<boolean> {
+  const res = await fetchImpl(resolutionUrl(base), {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ requestID, answers }),
+  })
+  if (res.status === 401) throw new Error("unauthorized")
+  return res.ok
+}
+
 export async function postPrompt(
   base: string,
   token: string,

@@ -1,10 +1,10 @@
 import { fireEvent, render } from "@testing-library/react-native"
 import { Linking } from "react-native"
-import { ConfirmModal, HeroCard, LinkText, NeedsAttentionCard, SessionCard, SwitcherModal } from "../src/components"
+import { ConfirmModal, HeroCard, LinkText, MultiQuestionForm, NeedsAttentionCard, SessionCard, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
 import { createStyles } from "../src/styles"
 import { darkTheme, lightTheme } from "../src/theme"
-import type { Session } from "../src/events"
+import type { PendingRequest, Session } from "../src/events"
 
 const styles = createStyles(lightTheme)
 
@@ -177,6 +177,39 @@ describe("inactive session", () => {
     )
     await fireEvent.press(getByText("more"))
     expect(getByText("less")).toBeTruthy()
+  })
+})
+
+describe("MultiQuestionForm", () => {
+  const request: PendingRequest = {
+    requestID: "r2",
+    sessionID: "s1",
+    kind: "question",
+    title: "Deploy target?",
+    options: ["Staging", "Production"],
+    allowFreeform: false,
+    questions: [
+      { key: "q0", title: "Deploy target?", options: ["Staging", "Production"], allowFreeform: false },
+      { key: "q1", title: "Run migrations?", options: ["Yes", "No"], allowFreeform: false },
+    ],
+  }
+
+  it("shows every question and submits all answers together", async () => {
+    const resolve = jest.fn()
+    const { getByText, getByLabelText } = await render(
+      <MultiQuestionForm request={request} resolve={resolve} styles={styles} theme={lightTheme} />,
+    )
+    expect(getByText("Deploy target?")).toBeTruthy()
+    expect(getByText("Run migrations?")).toBeTruthy()
+
+    // Submit before answering does nothing.
+    await fireEvent.press(getByLabelText("Submit answers"))
+    expect(resolve).not.toHaveBeenCalled()
+
+    await fireEvent.press(getByLabelText("Deploy target?: Staging"))
+    await fireEvent.press(getByLabelText("Run migrations?: Yes"))
+    await fireEvent.press(getByLabelText("Submit answers"))
+    expect(resolve).toHaveBeenCalledWith("r2", "Staging", { q0: "Staging", q1: "Yes" })
   })
 })
 

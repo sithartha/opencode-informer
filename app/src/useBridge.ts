@@ -4,7 +4,7 @@ import Constants from "expo-constants"
 import * as Notifications from "expo-notifications"
 import { applyEvent, emptyState, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
 import { connectionReducer, initialConnection } from "./connection"
-import { beginPairing, baseUrl, fetchState, pollPairing, postPrompt, postResolution, type ModelRef, type SessionOptions } from "./bridgeClient"
+import { beginPairing, baseUrl, fetchState, pollPairing, postAnswers, postPrompt, postResolution, type ModelRef, type SessionOptions } from "./bridgeClient"
 import * as sessionActions from "./sessionActions"
 import { BleClient } from "./bleClient"
 import { BridgeStream } from "./sse"
@@ -407,14 +407,15 @@ export function useBridge() {
     }
   }, [])
 
-  const resolve = useCallback(async (requestID: string, action: string) => {    const base = baseRef.current
+  const resolve = useCallback(async (requestID: string, action: string, answers?: Record<string, string>) => {
+    const base = baseRef.current
     const token = tokenRef.current
     if (!base || !token) return false
     if (resolvingRef.current.has(requestID)) return false
     resolvingRef.current.add(requestID)
     try {
-      const ok = await postResolution(base, token, requestID, action)
-      devLog("resolution", requestID, action, ok)
+      const ok = answers ? await postAnswers(base, token, requestID, answers) : await postResolution(base, token, requestID, action)
+      devLog("resolution", requestID, answers ? "answers" : action, ok)
       if (ok) {
         // Reflect the decision locally so the dashboard and Live Activity update
         // even when the app was woken in the background to handle the action.

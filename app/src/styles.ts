@@ -63,6 +63,7 @@ export function createStyles(t: Theme) {
     actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
     actionInner: { paddingVertical: 9, paddingHorizontal: 18, borderRadius: 10 },
     actionText: { color: "#ffffff", fontWeight: "700", fontSize: 14 },
+    questionBlock: { marginTop: 12 },
     freeformRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 10 },
     freeformInput: { flex: 1, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, color: "#ffffff", backgroundColor: "rgba(255,255,255,0.12)", minHeight: 40, maxHeight: 96, textAlignVertical: "top" },
     moreLink: { fontSize: 13, fontWeight: "600", color: t.accent, marginTop: 2 },

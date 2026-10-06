@@ -188,13 +188,17 @@ function makePermissionApplier(ctx) {
 
 function makeQuestionApplier() {
   // V2 exposes no ctx.session.form.reply, so questions are answered over the
-  // local service HTTP API; resolve the chosen label to the option value.
-  return async ({ sessionID, requestID, text, fields }) => {
-    const field = Array.isArray(fields) ? fields[0] : undefined
-    const key = field && field.key ? field.key : "q0"
-    // The service expects a Form.Answer: an object keyed by field key.
-    const answer = { [key]: buildFormAnswer(field, text) }
-    dbg("applyQuestion", { sessionID, requestID, text, answer })
+  // local service HTTP API; build a Form.Answer for every field of the form.
+  return async ({ sessionID, requestID, text, fields, answers }) => {
+    const list = Array.isArray(fields) ? fields : []
+    const provided = answers && typeof answers === "object" ? answers : {}
+    const answer = {}
+    list.forEach((field, index) => {
+      const key = (field && field.key) || `q${index}`
+      const value = provided[key] != null ? provided[key] : index === 0 ? text : ""
+      answer[key] = buildFormAnswer(field, value == null ? "" : value)
+    })
+    dbg("applyQuestion", { sessionID, requestID, answer })
     try {
       await replyToForm(sessionID, requestID, answer)
       dbg("applyQuestion ok", { requestID })

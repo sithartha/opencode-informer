@@ -27,6 +27,24 @@ function askQuestion(model) {
   })
 }
 
+function askMultiQuestion(model) {
+  model.apply({
+    type: "form.created",
+    data: {
+      sessionID: "ses_1",
+      form: {
+        id: "req_3",
+        sessionID: "ses_1",
+        title: "Questions",
+        fields: [
+          { key: "q0", title: "Deploy target?", options: [{ label: "Staging" }, { label: "Production" }] },
+          { key: "q1", title: "Run migrations?", options: [{ label: "Yes" }, { label: "No" }] },
+        ],
+      },
+    },
+  })
+}
+
 test("allow applies the permission and marks it resolved", async () => {
   const { model, coordinator, calls } = setup()
   askPermission(model)
@@ -52,6 +70,23 @@ test("a question answer carries the text and the fields", async () => {
   assert.equal(result.applied, true)
   assert.equal(calls.question[0].text, "PostgreSQL")
   assert.ok(Array.isArray(calls.question[0].fields))
+})
+
+test("a multi-question form requires an answer for every question", async () => {
+  const { model, coordinator, calls } = setup()
+  askMultiQuestion(model)
+
+  const incomplete = await coordinator.resolve("req_3", undefined, { q0: "Staging" })
+  assert.equal(incomplete.applied, false)
+  assert.equal(incomplete.reason, "invalid_action")
+  assert.equal(model.isResolved("req_3"), false)
+  assert.equal(calls.question.length, 0)
+
+  const complete = await coordinator.resolve("req_3", undefined, { q0: "Staging", q1: "Yes" })
+  assert.equal(complete.applied, true)
+  assert.deepEqual(calls.question[0].answers, { q0: "Staging", q1: "Yes" })
+  assert.equal(calls.question[0].text, "Staging")
+  assert.equal(model.isResolved("req_3"), true)
 })
 
 test("unknown and already-resolved requests are not applicable", async () => {

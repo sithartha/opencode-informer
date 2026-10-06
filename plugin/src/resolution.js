@@ -15,6 +15,38 @@ function withTimeout(promise, ms) {
   ])
 }
 
+function questionKey(question, index) {
+  return (question && question.key) || `q${index}`
+}
+
+/**
+ * Normalize a question resolution into `{ answers: { <key>: <text> }, text }`.
+ * Every question of a multi-question form must be answered; returns null when the
+ * resolution is incomplete so the bridge never applies a partial form reply.
+ */
+function questionAnswers(pending, action, answers) {
+  const questions = Array.isArray(pending.questions) ? pending.questions : []
+  const provided = answers && typeof answers === "object" ? answers : {}
+  const out = {}
+
+  if (questions.length > 1) {
+    for (let index = 0; index < questions.length; index += 1) {
+      const key = questionKey(questions[index], index)
+      const value = provided[key]
+      if (value == null || String(value).trim() === "") return null
+      out[key] = String(value)
+    }
+    return { answers: out, text: out[questionKey(questions[0], 0)] }
+  }
+
+  // Single question: accept a legacy `action` string or a keyed answer.
+  const key = questionKey(questions[0], 0)
+  const value = provided[key] != null ? String(provided[key]) : String(action == null ? "" : action)
+  if (!value) return null
+  out[key] = value
+  return { answers: out, text: value }
+}
+
 export class ResolutionCoordinator {
   constructor({ model, applyPermission, applyQuestion, onResolved, applyTimeoutMs = 10000 }) {
     this.model = model
@@ -24,7 +56,7 @@ export class ResolutionCoordinator {
     this.applyTimeoutMs = applyTimeoutMs
   }
 
-  async resolve(requestID, action) {
+  async resolve(requestID, action, answers) {
     if (!requestID || typeof requestID !== "string") {
       return { applied: false, reason: "invalid_request" }
     }
@@ -44,10 +76,16 @@ export class ResolutionCoordinator {
         }
         await withTimeout(this.applyPermission({ sessionID: pending.sessionID, requestID, decision }), this.applyTimeoutMs)
       } else {
-        const text = String(action == null ? "" : action)
-        if (!text) return { applied: false, reason: "invalid_action" }
+        const resolved = questionAnswers(pending, action, answers)
+        if (!resolved) return { applied: false, reason: "invalid_action" }
         await withTimeout(
-          this.applyQuestion({ sessionID: pending.sessionID, requestID, text, fields: pending.fields }),
+          this.applyQuestion({
+            sessionID: pending.sessionID,
+            requestID,
+            text: resolved.text,
+            fields: pending.fields,
+            answers: resolved.answers,
+          }),
           this.applyTimeoutMs,
         )
       }

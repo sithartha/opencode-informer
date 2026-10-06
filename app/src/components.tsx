@@ -14,7 +14,7 @@ export const PHASE_COLORS: Record<string, string> = {
   completed: "#616161",
 }
 
-export type Resolve = (id: string, action: string) => void
+export type Resolve = (id: string, action: string, answers?: Record<string, string>) => void
 
 export function BrandMark({ theme }: { theme: Theme }) {
   return (
@@ -140,6 +140,74 @@ export function ExpandableText({
   )
 }
 
+export function MultiQuestionForm({
+  request,
+  resolve,
+  styles,
+  theme,
+  onFieldFocus,
+}: {
+  request: PendingRequest
+  resolve: Resolve
+  styles: Styles
+  theme: Theme
+  onFieldFocus?: (y: number, h: number) => void
+}) {
+  const questions = request.questions ?? []
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const setAnswer = (key: string, value: string) => setAnswers((prev) => ({ ...prev, [key]: value }))
+  const complete = questions.length > 0 && questions.every((question) => (answers[question.key] ?? "").trim().length > 0)
+
+  return (
+    <View>
+      {questions.map((question) => {
+        const selected = answers[question.key]
+        return (
+          <View key={question.key} style={styles.questionBlock}>
+            <Text style={styles.fieldLabel}>{question.title}</Text>
+            {question.summary ? <Text style={styles.fieldDescription}>{question.summary}</Text> : null}
+            {question.options.length > 0 ? (
+              <View style={styles.actions}>
+                {question.options.map((option) => (
+                  <PressableScale
+                    key={option}
+                    onPress={() => setAnswer(question.key, option)}
+                    accessibilityLabel={`${question.title}: ${option}`}
+                  >
+                    <View style={[styles.actionInner, { backgroundColor: theme.option, opacity: selected === option ? 1 : 0.55 }]}>
+                      <Text style={styles.actionText}>{option}</Text>
+                    </View>
+                  </PressableScale>
+                ))}
+              </View>
+            ) : null}
+            {question.allowFreeform ? (
+              <InlineInput
+                placeholder="Type an answer"
+                onSubmit={(value) => setAnswer(question.key, value)}
+                styles={styles}
+                theme={theme}
+                onFieldFocus={onFieldFocus}
+              />
+            ) : null}
+          </View>
+        )
+      })}
+      <View style={styles.actions}>
+        <PressableScale
+          disabled={!complete}
+          onPress={() => complete && resolve(request.requestID, answers[questions[0].key] ?? "", answers)}
+          accessibilityLabel="Submit answers"
+        >
+          <View style={[styles.actionInner, { backgroundColor: theme.allow, opacity: complete ? 1 : 0.5 }]}>
+            <Text style={styles.actionText}>Submit</Text>
+          </View>
+        </PressableScale>
+      </View>
+    </View>
+  )
+}
+
 export function PendingActions({
   request,
   resolve,
@@ -168,6 +236,10 @@ export function PendingActions({
         </PressableScale>
       </View>
     )
+  }
+
+  if ((request.questions?.length ?? 0) > 1) {
+    return <MultiQuestionForm request={request} resolve={resolve} styles={styles} theme={theme} onFieldFocus={onFieldFocus} />
   }
 
   const options = request.options ?? []

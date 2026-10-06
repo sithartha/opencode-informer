@@ -36,6 +36,17 @@ export function notificationFor(event: ActivityEvent): NotificationPlan | null {
         requestID: String(data.requestID),
       }
     case "question.asked": {
+      const questions = Array.isArray(data.questions) ? data.questions : []
+      if (questions.length > 1) {
+        // A multi-question form cannot be answered with one action; open the app.
+        return {
+          category: "QUESTION",
+          title: "OpenCode has questions",
+          body: "Open the app to answer all questions",
+          actions: [],
+          requestID: String(data.requestID),
+        }
+      }
       const options = Array.isArray(data.options) ? data.options.slice(0, MAX_OPTION_ACTIONS).map(String) : []
       return {
         category: "QUESTION",
