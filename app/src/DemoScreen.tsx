@@ -6,7 +6,8 @@ import { applyEvent, emptyState, type AppState, type PendingRequest } from "./ev
 import type { StreamEventType } from "./contract"
 import type { Theme } from "./theme"
 import type { Styles } from "./styles"
-import { GradientButton, HeroCard, SessionCard } from "./components"
+import { GradientButton, HeroCard, SessionCard, SwitcherModal } from "./components"
+import type { Session } from "./events"
 import { FadeIn } from "./ui"
 
 /**
@@ -38,6 +39,7 @@ function seed(): AppState {
     requestID: "demo_q",
     title: "Which database should I use?",
     options: ["PostgreSQL", "SQLite", "MySQL"],
+    allowFreeform: true,
   })
   return state
 }
@@ -56,6 +58,7 @@ export function DemoScreen({
   styles: Styles
 }) {
   const [state, setState] = useState<AppState>(seed)
+  const [switcher, setSwitcher] = useState<Session | null>(null)
   const agg = aggregate(state)
   const sessions = Object.values(state.sessions)
 
@@ -124,6 +127,20 @@ export function DemoScreen({
     setState((prev) => applyEvent(prev, { type: "prompt.submitted", data: { sessionID, text } }))
   }
 
+  const switchAgent = (agent: string) => {
+    const target = switcher
+    if (!target) return
+    setState((prev) => applyEvent(prev, { type: "session.updated", data: { sessionID: target.id, agent } }))
+    setSwitcher(null)
+  }
+
+  const switchModel = (model: { providerID: string; id: string }) => {
+    const target = switcher
+    if (!target) return
+    setState((prev) => applyEvent(prev, { type: "session.updated", data: { sessionID: target.id, model } }))
+    setSwitcher(null)
+  }
+
   return (
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -168,10 +185,28 @@ export function DemoScreen({
               onStop={stopOne}
               onClose={closeOne}
               onSendPrompt={promptOne}
+              onOpenSwitcher={(value) => setSwitcher(value)}
             />
           </FadeIn>
         ))}
       </ScrollView>
+
+      <SwitcherModal
+        visible={switcher !== null}
+        agents={["build", "plan"]}
+        models={[
+          { providerID: "deepseek", id: "deepseek-flash" },
+          { providerID: "anthropic", id: "claude" },
+          { providerID: "openai", id: "gpt-5" },
+        ]}
+        currentAgent={switcher?.agent}
+        currentModel={switcher?.model}
+        onSelectAgent={switchAgent}
+        onSelectModel={switchModel}
+        onClose={() => setSwitcher(null)}
+        theme={theme}
+        styles={styles}
+      />
     </LinearGradient>
   )
 }

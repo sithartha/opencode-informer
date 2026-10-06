@@ -309,3 +309,14 @@ describe("session title", () => {
     expect(fallback.getByText("/Users/dev/api")).toBeTruthy()
   })
 })
+
+describe("DemoScreen switcher", () => {
+  it("opens the mode/model switcher from a card chip", async () => {
+    const { getAllByLabelText, getByText } = await render(
+      <DemoScreen onClose={() => {}} onOpenGallery={() => {}} theme={lightTheme} styles={styles} />,
+    )
+    await fireEvent.press(getAllByLabelText("Change mode and model")[0])
+    expect(getByText("Mode & model")).toBeTruthy()
+    expect(getByText("build")).toBeTruthy()
+  })
+})
