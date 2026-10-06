@@ -35,6 +35,6 @@
 
 ## 7. Verification
 
-- [ ] 7.1 CI green: all platforms compile and the hardware-free self-test passes (requires pushing the workflow)
+- [x] 7.1 CI green: all platforms compile and the hardware-free self-test passes (verified at 46b7619)
 - [x] 7.2 Contract parity self-test confirms the BLE UUIDs, doorbell payload, rendezvous, and `/pair/decision` flow match the phone and bridge (runs in `--selftest`)
 - [ ] 7.3 Real-hardware smoke test on Linux and Windows by a user with an LE-advertising adapter (the author cannot test locally); document results and known adapter caveats
