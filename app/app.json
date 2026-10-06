@@ -55,6 +55,7 @@
       "react-native-ble-plx",
       "expo-notifications",
       "expo-live-activity",
+      "./plugins/withLiveActivityView",
       "./plugins/withSceneLifecycle",
       [
         "expo-build-properties",
