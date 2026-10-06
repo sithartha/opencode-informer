@@ -6,7 +6,7 @@ import { appendFileSync } from "node:fs"
 
 // Bump this when the entry changes so a content-hash cache re-imports the
 // module graph (imported src files may otherwise be served from cache).
-const ENTRY_VERSION = "2026-10-06.12"
+const ENTRY_VERSION = "2026-10-06.13"
 try {
   appendFileSync("/tmp/open-island-mobile-debug.log", `[${new Date().toISOString()}] entry loaded v${ENTRY_VERSION}\n`)
 } catch {
