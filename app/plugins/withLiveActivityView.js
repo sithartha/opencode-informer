@@ -17,7 +17,7 @@ const CUSTOM_VIEW = path.join(__dirname, "liveActivity", "LiveActivityView.swift
 // After this many seconds without an app update, iOS marks the activity stale.
 // Foreground updates land well inside this window; background/suspended apps and a
 // lost Mac do not, which is exactly when the activity should read as not live.
-const STALE_AFTER_SECONDS = 60
+const STALE_AFTER_SECONDS = 30
 
 const WIDGET_FROM = "LiveActivityView(contentState: context.state, attributes: context.attributes)"
 const WIDGET_TO =
@@ -29,7 +29,9 @@ function patchWidget(source) {
 }
 
 function patchModule(source) {
-  return source.replace(/staleDate: nil/g, `staleDate: Date().addingTimeInterval(${STALE_AFTER_SECONDS})`)
+  return source
+    .replace(/staleDate: nil/g, `staleDate: Date().addingTimeInterval(${STALE_AFTER_SECONDS})`)
+    .replace(/addingTimeInterval\(\d+\)/g, `addingTimeInterval(${STALE_AFTER_SECONDS})`)
 }
 
 function writeIfExists(file, transform) {
