@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { actionToResolution, notificationFor, notificationForDoorbell } from "../src/notifications"
+import { actionToResolution, isAttentionEvent, notificationFor, notificationForDoorbell } from "../src/notifications"
 
 test("permission events map to an actionable notification", () => {
   const plan = notificationFor({ type: "permission.requested", data: { sessionID: "s1", requestID: "r1", title: "Allow Bash", summary: "rm -rf build/", agent: "OpenCode" } })
@@ -54,4 +54,11 @@ test("action identifiers resolve back to bridge actions", () => {
   assert.equal(actionToResolution("DENY"), "deny")
   assert.equal(actionToResolution("OPTION:Postgres"), "Postgres")
   assert.equal(actionToResolution("garbage"), null)
+})
+
+test("isAttentionEvent flags permissions and questions only", () => {
+  assert.equal(isAttentionEvent("permission.requested"), true)
+  assert.equal(isAttentionEvent("question.asked"), true)
+  assert.equal(isAttentionEvent("session.activity"), false)
+  assert.equal(isAttentionEvent("tool.started"), false)
 })

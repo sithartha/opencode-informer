@@ -100,3 +100,8 @@ export function notificationForDoorbell(payload: Record<string, unknown> | null)
       return null
   }
 }
+
+/** Events that need the user's attention (permission or question). */
+export function isAttentionEvent(type: string): boolean {
+  return type === "permission.requested" || type === "question.asked"
+}

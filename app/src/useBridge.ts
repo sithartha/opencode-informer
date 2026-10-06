@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react"
-import { AppState as RNAppState } from "react-native"
+import { AppState as RNAppState, Vibration } from "react-native"
 import Constants from "expo-constants"
 import * as Notifications from "expo-notifications"
 import { applyEvent, emptyState, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
@@ -20,7 +20,7 @@ import {
 } from "./secureTokenStore"
 import type { ThemeMode } from "./theme"
 import { reconnectWithToken } from "./reconnect"
-import { actionToResolution, notificationFor, notificationForDoorbell } from "./notifications"
+import { actionToResolution, isAttentionEvent, notificationFor, notificationForDoorbell } from "./notifications"
 import { configureNotifications, dismissNotification, presentNotification, registerQuestionCategory } from "./pushNotifications"
 import { manualBase } from "./manualConnect"
 import { liveActivity } from "./liveActivity"
@@ -100,6 +100,11 @@ export function useBridge() {
 
   const handleEvent = useCallback((event: ActivityEvent) => {
     devLog("event", event.type)
+    lastRefreshRef.current = Date.now()
+    // Buzz when something needs the user while the app is in the foreground.
+    if (isAttentionEvent(event.type) && RNAppState.currentState === "active") {
+      Vibration.vibrate(200)
+    }
     setAppState((prev) => applyEvent(prev, event))
 
     if (event.type === "actionable.resolved") {
@@ -433,6 +438,21 @@ export function useBridge() {
     liveActivity.update(appState)
     pendingRef.current = appState.pending
   }, [appState])
+
+  // Watchdog: an SSE socket can stay half-open when the Mac sleeps, so probe the
+  // bridge on a timer; if it stops answering, show "No connection" and reconnect.
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      if (!baseRef.current || !tokenRef.current) return
+      if (Date.now() - lastRefreshRef.current < 15000) return
+      const snapshot = await syncState(true)
+      if (!snapshot) {
+        liveActivity.setDisconnected(true)
+        scheduleReconnectRef.current()
+      }
+    }, 10000)
+    return () => clearInterval(timer)
+  }, [syncState])
 
   // Mark the activity stale once the aggregate has gone unrefreshed too long.
   useEffect(() => {

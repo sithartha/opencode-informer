@@ -80,11 +80,25 @@ export async function pollPairing(base: string, approvalID: string, fetchImpl: F
   return { status: "pending", approvalID }
 }
 
-export async function fetchState(base: string, token: string, fetchImpl: FetchLike = fetch): Promise<Snapshot> {
-  const res = await fetchImpl(stateUrl(base), { headers: authHeaders(token) })
-  if (res.status === 401) throw new Error("unauthorized")
-  if (!res.ok) throw new Error(`state ${res.status}`)
-  return (await res.json()) as Snapshot
+export async function fetchState(
+  base: string,
+  token: string,
+  fetchImpl: FetchLike = fetch,
+  timeoutMs = 8000,
+): Promise<Snapshot> {
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
+  try {
+    const res = await fetchImpl(stateUrl(base), {
+      headers: authHeaders(token),
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+    if (res.status === 401) throw new Error("unauthorized")
+    if (!res.ok) throw new Error(`state ${res.status}`)
+    return (await res.json()) as Snapshot
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 export async function postResolution(
