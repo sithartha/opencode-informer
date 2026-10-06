@@ -1,0 +1,40 @@
+# Tasks
+
+## 1. Scaffold the cross-platform helper
+
+- [ ] 1.1 Create the Rust helper crate under `helper/` with shared modules: ring HTTP server (`127.0.0.1:38964`), rendezvous provider (reads the bridge address), loopback approval page (`GET /` / `POST /pair/decision` relay), and CLI (`--open`, `--selftest`, `--scan`, `--advertise`)
+- [ ] 1.2 Add the shared contract constants (service/characteristic UUIDs, doorbell payload, rendezvous encoding) as a single module, with a parity self-test against `contract/contract.json`
+- [ ] 1.3 Implement `--selftest` (hardware-free: ring server, rendezvous, approval page, token relay) and make it exit non-zero on failure
+
+## 2. Linux BLE backend (BlueZ)
+
+- [ ] 2.1 Register a GATT application over D-Bus (`org.bluez.GattManager1`) exposing the doorbell (notify), rendezvous (read) and pairing (write) characteristics
+- [ ] 2.2 Register an LE advertisement (`org.bluez.LEAdvertisingManager1`) and re-advertise after a client disconnects
+- [ ] 2.3 If the adapter cannot advertise, fall back to LAN-only mode with a clear log message (no fabricated events)
+
+## 3. Windows BLE backend (WinRT)
+
+- [ ] 3.1 Create a local GATT service with `GattServiceProvider` (notify characteristic) and advertise it with `BluetoothLEAdvertisementPublisher`
+- [ ] 3.2 Relay the pairing write to the bridge and keep advertising after a client disconnects
+- [ ] 3.3 If the provider/adapter cannot advertise, fall back to LAN-only mode with a clear message
+
+## 4. macOS backend (optional)
+
+- [ ] 4.1 Add a CoreBluetooth peripheral backend (via `objc2`) so the same helper can run headless on macOS, or explicitly document that macOS uses `mac-helper/` instead
+
+## 5. Approval UX and docs
+
+- [ ] 5.1 Implement the loopback approval page and terminal prompt; log the URL on a pairing ring and support `--open`
+- [ ] 5.2 Write `helper/README.md`: install/run per platform, BLE adapter limitations, LAN-only fallback, and the self-test/scan/advertise diagnostics
+
+## 6. Packaging and release
+
+- [ ] 6.1 Add a CI build matrix (ubuntu, windows, macos) that builds release binaries and runs `--selftest`
+- [ ] 6.2 Attach per-platform artifacts (`helper-linux-x86_64`, `helper-windows-x86_64.exe`, optional macOS) to a Release; document that Linux/Windows artifacts are unsigned
+- [ ] 6.3 Update `docs/release-checklist.md` with the cross-platform build/release steps
+
+## 7. Verification
+
+- [ ] 7.1 CI green: all platforms compile and the hardware-free self-test passes
+- [ ] 7.2 Contract parity self-test confirms the BLE UUIDs, doorbell payload, rendezvous, and `/pair/decision` flow match the phone and bridge
+- [ ] 7.3 Real-hardware smoke test on Linux and Windows by a user with an LE-advertising adapter (the author cannot test locally); document results and known adapter caveats
