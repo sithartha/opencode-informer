@@ -359,3 +359,17 @@ test("session.meta applies an agent/model switch immediately", () => {
   assert.equal(snap.agent, "plan")
   assert.equal(snap.model, "deepseek/deepseek-flash")
 })
+
+test("a session adopted before its parent is learned folds into the parent", () => {
+  const model = new ActivityModel()
+  apply(model, [created("root")])
+  // The child's event arrives before its session.created(parentID): a row leaks.
+  apply(model, [{ type: "session.tool.called", data: { sessionID: "child", id: "t1", name: "Bash", input: "ls" } }])
+  assert.ok(model.snapshot().sessions.some((s) => s.id === "child"))
+  // Learning the parent removes the leaked row and folds into the parent.
+  const out = apply(model, [{ type: "session.created", data: { sessionID: "child", parentID: "root" } }])
+  assert.deepEqual(out, [{ type: "session.ended", data: { sessionID: "child" } }])
+  const snap = model.snapshot()
+  assert.ok(!snap.sessions.some((s) => s.id === "child"))
+  assert.equal(snap.sessions.find((s) => s.id === "root").subagents, 1)
+})

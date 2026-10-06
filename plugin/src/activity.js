@@ -171,6 +171,11 @@ export class ActivityModel {
         if (payload.parentID) {
           this.parents.set(payload.sessionID, payload.parentID)
           const root = this.rootSession(payload.parentID)
+          // If a row was created for this child before we learned its parent
+          // (lazy adoption), drop it so it folds into the parent.
+          if (this.sessions.delete(payload.sessionID)) {
+            out.push(ev("session.ended", { sessionID: payload.sessionID }))
+          }
           const parentSession = this.sessions.get(root)
           if (parentSession) {
             parentSession.subagents = (parentSession.subagents || 0) + 1
