@@ -1,0 +1,65 @@
+name: helper
+
+on:
+  push:
+    paths:
+      - "helper/**"
+      - "contract/**"
+      - ".github/workflows/helper.yml"
+  pull_request:
+    paths:
+      - "helper/**"
+      - "contract/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+            binary: opencode-informer-helper
+          - os: windows-latest
+            target: windows-x86_64
+            binary: opencode-informer-helper.exe
+          - os: macos-latest
+            target: macos-aarch64
+            binary: opencode-informer-helper
+    defaults:
+      run:
+        working-directory: helper
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libdbus (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - run: cargo build --release --locked
+
+      - name: Self-test (hardware-free)
+        run: cargo run --release --locked -- --selftest
+
+      - name: Package artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/release/${{ matrix.binary }}" "dist/opencode-informer-helper-${{ matrix.target }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencode-informer-helper-${{ matrix.target }}
+          path: helper/dist/opencode-informer-helper-${{ matrix.target }}
+          if-no-files-found: error

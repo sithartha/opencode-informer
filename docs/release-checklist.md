@@ -73,3 +73,19 @@ At https://appstoreconnect.apple.com → **My Apps** → **OpenCode Informer**.
 - **Add for Review** → inspect the draft → **Submit for Review**.
 - Watch for reviewer messages under **App Review**; respond promptly.
 - After approval, use **Release This Version** (manual release).
+
+## 10. Cross-platform helper (Linux / Windows)
+
+The macOS helper is the signed menu-bar app in `mac-helper/` (released with
+`mac-helper/scripts/release-helper.sh`, see above). The cross-platform helper in
+`helper/` covers **Linux and Windows**:
+
+1. Push to `main` (or run the `helper` workflow manually from the **Actions** tab). The
+   matrix builds Linux, Windows, and macOS release binaries and runs the hardware-free
+   `--selftest` on each.
+2. Download the `opencode-informer-helper-*` artifacts from the workflow run.
+3. Create a Release and attach the Linux/Windows binaries (releases are kept local; no
+   secrets are involved). Note in the release that these binaries are **unsigned**.
+4. Verify locally before publishing: `cd helper && cargo run --release -- --selftest`
+   (contract parity, ring + approval flow, decision relay).
+
