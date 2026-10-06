@@ -43,10 +43,6 @@ export function switchUrl(base: string): string {
   return `${base}${CONTRACT.endpoints.switch}`
 }
 
-export function deviceUrl(base: string): string {
-  return `${base}${CONTRACT.endpoints.device}`
-}
-
 export type ModelRef = { providerID: string; id: string; variant?: string; name?: string }
 export type SessionOptions = { agents: string[]; models: ModelRef[] }
 
@@ -183,21 +179,6 @@ export async function postSwitch(
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify({ sessionID, ...target }),
-  })
-  if (res.status === 401) throw new Error("unauthorized")
-  return res.ok
-}
-
-export async function postDevice(
-  base: string,
-  token: string,
-  deviceToken: string,
-  fetchImpl: FetchLike = fetch,
-): Promise<boolean> {
-  const res = await fetchImpl(deviceUrl(base), {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify({ token: deviceToken, platform: "ios" }),
   })
   if (res.status === 401) throw new Error("unauthorized")
   return res.ok

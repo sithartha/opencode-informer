@@ -105,18 +105,6 @@ Pending requests are reconstructed from `GET /state` (the snapshot includes them
 
 When pairing, the app sends a device name — the system name by default, editable via the **Device name** field — so the Mac helper's approval prompt reads "Pair &lt;device name&gt;?".
 
-## Remote push (APNs)
-
-When the phone is away from the LAN (no BLE range, no stream), the Mac sends an APNs push
-for attention events directly (no server). The app registers for remote notifications, sends
-its APNs device token to the bridge (`POST /device`), and presents the push like a local
-notification. A push is only sent when no client is streaming, so a live event is never
-duplicated.
-
-Device builds need the **Push Notifications** capability on the bundle id and an
-`aps-environment` entitlement (set in `app.json`; `development` for dev builds, `production`
-for release). Without an APNs key configured on the Mac, the feature is simply off.
-
 ## Tests
 
 ```bash

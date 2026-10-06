@@ -5,7 +5,6 @@ import { createBridgeServer } from "./server.js"
 import { createDoorbell } from "./doorbell.js"
 import { configFromEnv } from "./contract.js"
 import { buildFormAnswer, replyToForm, replyToPermission } from "./serviceReply.js"
-import { createApnsSender } from "./apns.js"
 import { appendFileSync } from "node:fs"
 
 // Diagnostics for the real-OpenCode integration; append-only and best-effort.
@@ -52,7 +51,8 @@ export function buildBridge(options = {}) {
   const stopSessionRaw = options.stopSession || (async () => {})
   const closeSession = options.closeSession || (async () => {})
   const optionsProvider = options.optionsProvider || (async () => ({ agents: [], models: [] }))
-  const switchSessionRaw = options.switchSession || (async () => {})  // Apply the switch, then reflect it immediately (OpenCode reports the new
+  const switchSessionRaw = options.switchSession || (async () => {})
+  // Apply the switch, then reflect it immediately (OpenCode reports the new
   // agent/model only on the next step event).
   const switchSession = async (args) => {
     await switchSessionRaw(args)
@@ -85,34 +85,6 @@ export function buildBridge(options = {}) {
     handleEvent({ type: "session.idle.silent", data: { sessionID: args.sessionID } })
   }
 
-  // APNs: the Mac sends the push directly (token auth); only when no client is
-  // streaming, so a live event is never duplicated.
-  const apns = options.apns || createApnsSender(config.apns || {})
-  const devices = new Map()
-  function registerDevice({ token, platform }) {
-    if (token) devices.set(String(token), { platform: platform || "ios", at: Date.now() })
-  }
-  function apnsPayload(kind, data) {
-    if (kind === "permission") {
-      const body = `${data.title || "Permission"}${data.summary ? `: ${data.summary}` : ""}`
-      return { aps: { alert: { title: "OpenCode needs approval", body }, category: "PERMISSION_REQUEST", sound: "default" }, kind }
-    }
-    if (kind === "question") {
-      return { aps: { alert: { title: "OpenCode has a question", body: String(data.title || "A question") }, sound: "default" }, kind }
-    }
-    return { aps: { alert: { title: "OpenCode finished a task", body: String(data.summary || "A session completed") }, category: "SESSION_COMPLETED", sound: "default" }, kind }
-  }
-  async function pushAttention(kind, data) {
-    if (!apns.enabled || (server && server.clientCount() > 0)) return
-    const payload = apnsPayload(kind, data)
-    if (data.requestID) payload.requestID = data.requestID
-    if (data.sessionID) payload.sessionID = data.sessionID
-    for (const token of [...devices.keys()]) {
-      const result = await apns.send(token, payload)
-      if (result && result.status === 410) devices.delete(token)
-    }
-  }
-
   let server
   const resolution = new ResolutionCoordinator({
     model,
@@ -136,7 +108,6 @@ export function buildBridge(options = {}) {
     closeSession,
     optionsProvider,
     switchSession,
-    onDevice: registerDevice,
   })
 
   const getSessionTitle = options.getSessionTitle
@@ -181,7 +152,6 @@ export function buildBridge(options = {}) {
           sessionID: emitted.data.sessionID,
           title: emitted.data.title || emitted.data.summary || "",
         })
-        void pushAttention(kind, emitted.data)
       }
     }
     const type = event && event.type
@@ -195,7 +165,7 @@ export function buildBridge(options = {}) {
     return events
   }
 
-  return { config, model, pairing, resolution, server, doorbell, devices, apns, handleEvent }
+  return { config, model, pairing, resolution, server, doorbell, handleEvent }
 }
 
 function makePermissionApplier(ctx) {

@@ -23,12 +23,5 @@ export function configFromEnv(env = process.env) {
   const applyTimeoutMs = env.OPEN_ISLAND_MOBILE_APPLY_TIMEOUT_MS
     ? Number(env.OPEN_ISLAND_MOBILE_APPLY_TIMEOUT_MS)
     : 10000
-  const apns = {
-    keyPath: env.OPEN_ISLAND_APNS_KEY_PATH || "",
-    keyId: env.OPEN_ISLAND_APNS_KEY_ID || "",
-    teamId: env.OPEN_ISLAND_APNS_TEAM_ID || "",
-    topic: env.OPEN_ISLAND_APNS_TOPIC || "ru.opencode.informer",
-    production: env.OPEN_ISLAND_APNS_PRODUCTION ? env.OPEN_ISLAND_APNS_PRODUCTION !== "0" : true,
-  }
-  return { host: contract.bridge.host, port, helperUrl, keepaliveMs, applyTimeoutMs, apns }
+  return { host: contract.bridge.host, port, helperUrl, keepaliveMs, applyTimeoutMs }
 }

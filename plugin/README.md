@@ -38,7 +38,6 @@ All endpoints except `/pair` require `Authorization: Bearer <token>`.
 | `POST` | `/close` | yes | `{sessionID}` → `200 {status:"accepted"}` (closes the session) or `409 {status:"not_applied"}` |
 | `GET` | `/options` | yes | discovered modes and models: `{status:"accepted", agents:[…], models:[{providerID, id, variant?}]}` |
 | `POST` | `/switch` | yes | `{sessionID, agent?, model?}` → `200 {status:"accepted"}` or `409 {status:"not_applied"}` |
-| `POST` | `/device` | yes | `{token, platform}` → `200 {status:"accepted"}` (registers an APNs device token for remote pushes) |
 
 ### Activity stream events
 
@@ -53,25 +52,8 @@ Payload shapes are defined in `../contract/contract.json` (a copy of the fixture
 `/events` is live-only and does not replay history; clients fetch `/state` on connect
 and then follow the stream.
 
-## Remote push (APNs)
-
-When no client is streaming (the phone is away from the LAN), the bridge sends an APNs
-push for permission, question, and completion events, directly from the Mac. Configure an
-APNs auth key (`.p8`):
-
-| Env | Meaning |
-|---|---|
-| `OPEN_ISLAND_APNS_KEY_PATH` | Path to the `.p8` APNs auth key |
-| `OPEN_ISLAND_APNS_KEY_ID` | Key ID from the Apple Developer portal |
-| `OPEN_ISLAND_APNS_TEAM_ID` | Apple team id |
-| `OPEN_ISLAND_APNS_TOPIC` | App bundle id (default `ru.opencode.informer`) |
-| `OPEN_ISLAND_APNS_PRODUCTION` | `0` for the sandbox host, otherwise production |
-
-If the key is not configured, APNs is simply disabled and the bridge behaves as before
-(BLE + LAN only). Pushes are never sent while a client is connected, and a push failure
-never affects agent execution.
-
 ## BLE trigger (plugin → helper)
+
 On `permission.requested`, `question.asked`, and `turn.completed` the bridge POSTs a
 compact doorbell to the helper on localhost:
 

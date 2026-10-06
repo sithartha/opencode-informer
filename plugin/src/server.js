@@ -44,7 +44,7 @@ function parseJSON(text) {
 }
 
 // Minimal HTTP + SSE server for the LAN API. Only node:* modules are used.
-export function createBridgeServer({ port, host, pairing, model, resolution, keepaliveMs = 15000, sendPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession, onDevice }) {
+export function createBridgeServer({ port, host, pairing, model, resolution, keepaliveMs = 15000, sendPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession }) {
   const sseClients = new Set()
   let keepaliveTimer = null
 
@@ -185,15 +185,8 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
     }
   }
 
-  async function handleDevice(req, res) {
-    const body = parseJSON(await readBody(req))
-    const token = String(body.token || "")
-    if (!token) return sendJSON(res, 400, { error: "token is required" })
-    if (typeof onDevice === "function") onDevice({ token, platform: body.platform })
-    return sendJSON(res, 200, { status: "accepted" })
-  }
-
-  async function handleOptions(_req, res) {    if (typeof optionsProvider !== "function") return sendJSON(res, 409, { status: "unavailable" })
+  async function handleOptions(_req, res) {
+    if (typeof optionsProvider !== "function") return sendJSON(res, 409, { status: "unavailable" })
     try {
       const options = (await optionsProvider()) || {}
       return sendJSON(res, 200, { status: "accepted", agents: options.agents || [], models: options.models || [] })
@@ -253,7 +246,6 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
     if (req.method === "POST" && path === "/close") return handleSessionAction(req, res, closeSession)
     if (req.method === "GET" && path === "/options") return handleOptions(req, res)
     if (req.method === "POST" && path === "/switch") return handleSwitch(req, res)
-    if (req.method === "POST" && path === "/device") return handleDevice(req, res)
     return sendJSON(res, 404, { error: "not found" })
   }
 
