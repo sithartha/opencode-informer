@@ -37,6 +37,9 @@ import WidgetKit
   struct LiveActivityView: View {
     let contentState: LiveActivityAttributes.ContentState
     let attributes: LiveActivityAttributes
+    // Set by the system once the activity's staleDate passes (no update for a
+    // while — the app is suspended or the Mac is unreachable).
+    var isStale: Bool = false
     @State private var imageContainerSize: CGSize?
 
     var progressViewTint: Color? {
@@ -183,6 +186,7 @@ import WidgetKit
 
       let total = parseTotal(contentState.title)
       let rows = parseIndicators(contentState.subtitle)
+        + (isStale ? [IndicatorRow(text: "stale · not updating", color: "#FF9F0A")] : [])
       let labelColor = Color(hex: attributes.subtitleColor ?? "#DDDDDD")
 
       HStack(alignment: .center, spacing: 16) {
@@ -233,6 +237,7 @@ import WidgetKit
         }
       }
       .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
+      .opacity(isStale ? 0.55 : 1)
     }
 
     private struct IndicatorRow: Hashable {
