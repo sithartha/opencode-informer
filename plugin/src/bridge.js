@@ -5,6 +5,7 @@ import { createBridgeServer } from "./server.js"
 import { createDoorbell } from "./doorbell.js"
 import { configFromEnv } from "./contract.js"
 import { buildFormAnswer, replyToForm, replyToPermission } from "./serviceReply.js"
+import { superviseEventStream } from "./eventStream.js"
 import { appendFileSync } from "node:fs"
 
 // Diagnostics for the real-OpenCode integration; append-only and best-effort.
@@ -332,19 +333,18 @@ export async function setup(ctx, options = {}) {
   globalThis[STARTED_KEY] = bridge
 
   const abort = new AbortController()
-  void (async () => {
-    try {
-      for await (const event of ctx.event.subscribe({ signal: abort.signal })) {
-        try {
-          bridge.handleEvent(event)
-        } catch (err) {
-          debug(`event handling failed: ${err && err.message}`)
-        }
-      }
-    } catch (err) {
-      if (!abort.signal.aborted) debug(`event loop error: ${err && err.message}`)
-    }
-  })()
+  void superviseEventStream({
+    subscribe: (opts) => ctx.event.subscribe(opts),
+    onEvent: (event) => bridge.handleEvent(event),
+    signal: abort.signal,
+    log: (message) => dbg("eventStream", { message }),
+    onReconnect: (attempt) => {
+      // Events during the gap were missed: ask the phone to resync from the
+      // current snapshot and record the recovery for diagnostics.
+      dbg("eventStream reconnect", { attempt })
+      void bridge.doorbell({ kind: "refresh" })
+    },
+  }).catch((err) => debug(`event stream supervisor failed: ${err && err.message}`))
 
   bridge.stop = async () => {
     abort.abort()
