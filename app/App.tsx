@@ -51,9 +51,10 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showDemo, setShowDemo] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{ kind: "start" | "stop" | "close"; sessionID?: string } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{ kind: "stop" | "close"; sessionID?: string } | null>(null)
   const [switcherSession, setSwitcherSession] = useState<Session | null>(null)
   const [switchOptions, setSwitchOptions] = useState<{ agents: string[]; models: { providerID: string; id: string; name?: string }[] }>({ agents: [], models: [] })
+  const [startDraft, setStartDraft] = useState<{ agent?: string; model?: { providerID: string; id: string } } | null>(null)
   useEffect(() => setNameDraft(deviceName), [deviceName])
 
   const scrollRef = useRef<ScrollView>(null)
@@ -93,14 +94,25 @@ export default function App() {
     [loadOptions],
   )
 
+  // Start a session: ask for a mode and a model first (skip a step when the bridge
+  // reports none), then create the session with the selection.
+  const beginStart = useCallback(async () => {
+    const options = await loadOptions()
+    setSwitchOptions(options)
+    if (options.agents.length === 0 && options.models.length === 0) {
+      await startSession()
+      return
+    }
+    setStartDraft({})
+  }, [loadOptions, startSession])
+
   const confirmPending = useCallback(async () => {
     const action = confirmAction
     setConfirmAction(null)
     if (!action) return
-    if (action.kind === "start") await startSession()
-    else if (action.kind === "stop" && action.sessionID) await stopSession(action.sessionID)
+    if (action.kind === "stop" && action.sessionID) await stopSession(action.sessionID)
     else if (action.kind === "close" && action.sessionID) await closeSession(action.sessionID)
-  }, [confirmAction, startSession, stopSession, closeSession])
+  }, [confirmAction, stopSession, closeSession])
 
   const pending = Object.values(appState.pending)
   const agg = aggregate(appState)
@@ -149,7 +161,7 @@ export default function App() {
         {connection.error ? <Text style={styles.error}>{connection.error}</Text> : null}
 
         <FadeIn style={styles.heroWrap}>
-          <HeroCard agg={agg} theme={theme} styles={styles} onStart={() => setConfirmAction({ kind: "start" })} />
+          <HeroCard agg={agg} theme={theme} styles={styles} onStart={() => void beginStart()} />
         </FadeIn>
 
         {!paired ? (
@@ -293,21 +305,13 @@ export default function App() {
 
       <ConfirmModal
         visible={confirmAction !== null}
-        title={
-          confirmAction?.kind === "close"
-            ? "Close this session?"
-            : confirmAction?.kind === "start"
-              ? "Start a new session?"
-              : "Stop this session?"
-        }
+        title={confirmAction?.kind === "close" ? "Close this session?" : "Stop this session?"}
         message={
           confirmAction?.kind === "close"
             ? "The OpenCode session will be closed and its card removed."
-            : confirmAction?.kind === "start"
-              ? "A new empty OpenCode session will be created; you can then send its first prompt."
-              : "The current turn will be stopped. You can then send a new prompt."
+            : "The current turn will be stopped. You can then send a new prompt."
         }
-        confirmLabel={confirmAction?.kind === "close" ? "Close" : confirmAction?.kind === "start" ? "Start" : "Stop"}
+        confirmLabel={confirmAction?.kind === "close" ? "Close" : "Stop"}
         onConfirm={() => void confirmPending()}
         onCancel={() => setConfirmAction(null)}
         theme={theme}
@@ -315,12 +319,22 @@ export default function App() {
       />
 
       <SwitcherModal
-        visible={switcherSession !== null}
+        visible={switcherSession !== null || startDraft !== null}
         agents={switchOptions.agents}
         models={switchOptions.models}
-        currentAgent={switcherSession?.agent}
-        currentModel={switcherSession?.model}
+        currentAgent={switcherSession?.agent ?? startDraft?.agent}
+        currentModel={switcherSession?.model ?? (startDraft?.model ? `${startDraft.model.providerID}/${startDraft.model.id}` : undefined)}
         onSelectAgent={(agent) => {
+          if (startDraft) {
+            // No models reported: the mode is the last choice, so start now.
+            if (switchOptions.models.length === 0) {
+              setStartDraft(null)
+              void startSession(undefined, { agent })
+            } else {
+              setStartDraft({ ...startDraft, agent })
+            }
+            return
+          }
           const target = switcherSession
           if (target) {
             void switchSession(target.id, { agent })
@@ -328,13 +342,22 @@ export default function App() {
           }
         }}
         onSelectModel={(model) => {
+          if (startDraft) {
+            const selection = { agent: startDraft.agent, model }
+            setStartDraft(null)
+            void startSession(undefined, selection)
+            return
+          }
           const target = switcherSession
           if (target) {
             void switchSession(target.id, { model })
             setSwitcherSession(null)
           }
         }}
-        onClose={() => setSwitcherSession(null)}
+        onClose={() => {
+          setSwitcherSession(null)
+          setStartDraft(null)
+        }}
         theme={theme}
         styles={styles}
       />

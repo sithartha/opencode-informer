@@ -67,10 +67,15 @@ export function buildBridge(options = {}) {
   // force it idle without a completion notification (so the card shows a prompt).
   const pendingIdle = new Map()
   const markIdle = (sessionID) => handleEvent({ type: "session.idle.silent", data: { sessionID } })
-  const startSession = async (args) => {
+  const startSession = async (args = {}) => {
     const session = await startSessionRaw(args)
     const id = session && (session.id || session.sessionID)
     if (id) {
+      // Reflect the chosen mode/model at once (OpenCode reports them only on the
+      // next step event).
+      if (args.agent || args.model) {
+        handleEvent({ type: "session.meta", data: { sessionID: id, agent: args.agent, model: args.model } })
+      }
       const timer = setTimeout(() => {
         pendingIdle.delete(id)
         markIdle(id)
@@ -218,10 +223,15 @@ function makePromptApplier(ctx) {
 }
 
 function makeStartApplier(ctx) {
-  return async ({ title } = {}) => {
-    dbg("applyStart", { title })
+  return async ({ title, agent, model } = {}) => {
+    dbg("applyStart", { title, agent, model })
     const session = await ctx.session.create(title ? { title } : {})
-    dbg("applyStart ok", { id: session && (session.id || session.sessionID) })
+    const id = session && (session.id || session.sessionID)
+    // Apply the chosen mode/model before the first turn: create, then switch with
+    // the same calls the switch applier uses.
+    if (id && agent) await ctx.session.switchAgent({ sessionID: id, agent })
+    if (id && model) await ctx.session.switchModel({ sessionID: id, model })
+    dbg("applyStart ok", { id })
     return session
   }
 }

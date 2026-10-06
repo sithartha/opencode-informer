@@ -265,6 +265,20 @@ test("POST /sessions starts a session", async (t) => {
   assert.equal(calls.start.length, 1)
 })
 
+test("POST /sessions forwards the chosen agent and model", async (t) => {
+  const { bridge, calls, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const res = await fetch(`http://127.0.0.1:${port}/sessions`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ agent: "plan", model: { providerID: "deepseek", id: "deepseek-flash" } }),
+  })
+  assert.equal(res.status, 200)
+  const last = calls.start.at(-1)
+  assert.equal(last.agent, "plan")
+  assert.deepEqual(last.model, { providerID: "deepseek", id: "deepseek-flash" })
+})
+
 test("POST /stop and /close forward the sessionID", async (t) => {
   const { bridge, calls, port } = await startBridge(t)
   const token = await pair(port, bridge)

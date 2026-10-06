@@ -345,12 +345,12 @@ export function useBridge() {
     }
   }, [])
 
-  const startSession = useCallback(async (title?: string) => {
+  const startSession = useCallback(async (title?: string, selection?: { agent?: string; model?: ModelRef }) => {
     const base = baseRef.current
     const token = tokenRef.current
     if (!base || !token) return false
     try {
-      return await sessionActions.startSession(base, token, syncState, title)
+      return await sessionActions.startSession(base, token, syncState, title, undefined, selection)
     } catch {
       return false
     }

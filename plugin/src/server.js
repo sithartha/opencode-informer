@@ -164,7 +164,9 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
     if (typeof startSession !== "function") return sendJSON(res, 409, { status: "unavailable" })
     try {
       const title = typeof body.title === "string" && body.title.trim() ? body.title : undefined
-      const session = await startSession({ title })
+      const agent = typeof body.agent === "string" && body.agent ? body.agent : undefined
+      const model = body.model && typeof body.model === "object" ? body.model : undefined
+      const session = await startSession({ title, agent, model })
       const sessionID = session && (session.id || session.sessionID)
       return sendJSON(res, 200, { status: "accepted", ...(sessionID ? { sessionID } : {}) })
     } catch (err) {

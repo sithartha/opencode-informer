@@ -155,16 +155,21 @@ export async function postStart(
   token: string,
   title?: string,
   fetchImpl: FetchLike = fetch,
+  selection?: { agent?: string; model?: ModelRef },
 ): Promise<string | null> {
+  const body: Record<string, unknown> = {}
+  if (title) body.title = title
+  if (selection?.agent) body.agent = selection.agent
+  if (selection?.model) body.model = selection.model
   const res = await fetchImpl(sessionsUrl(base), {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify(title ? { title } : {}),
+    body: JSON.stringify(body),
   })
   if (res.status === 401) throw new Error("unauthorized")
   if (!res.ok) return null
-  const body = (await res.json()) as { sessionID?: string }
-  return body.sessionID ?? ""
+  const response = (await res.json()) as { sessionID?: string }
+  return response.sessionID ?? ""
 }
 
 async function postSessionAction(

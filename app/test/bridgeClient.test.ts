@@ -100,6 +100,16 @@ test("postStart returns the new session id", async () => {
   assert.equal(await postStart("http://h:1", "t", undefined, fetchImpl), "ses_new")
 })
 
+test("postStart posts the chosen agent and model", async () => {
+  let seen: unknown = null
+  const fetchImpl = (async (_url: string, init: { body?: string }) => {
+    seen = JSON.parse(String(init.body))
+    return { status: 200, ok: true, json: async () => ({ status: "accepted", sessionID: "ses_new" }) }
+  }) as unknown as FetchLike
+  await postStart("http://h:1", "t", undefined, fetchImpl, { agent: "plan", model: { providerID: "deepseek", id: "deepseek-flash" } })
+  assert.deepEqual(seen, { agent: "plan", model: { providerID: "deepseek", id: "deepseek-flash" } })
+})
+
 test("postStop and postClose report ok", async () => {
   const ok = (async () => ({ status: 200, ok: true, json: async () => ({}) })) as unknown as FetchLike
   assert.equal(await postStop("http://h:1", "t", "ses_1", ok), true)

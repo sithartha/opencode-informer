@@ -21,8 +21,9 @@ export async function startSession(
   sync: () => unknown,
   title?: string,
   fetchImpl?: FetchLike,
+  selection?: { agent?: string; model?: ModelRef },
 ): Promise<boolean> {
-  const id = await postStart(base, token, title, fetchImpl)
+  const id = await postStart(base, token, title, fetchImpl, selection)
   if (id === null) return false
   await sync()
   return true

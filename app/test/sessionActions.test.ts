@@ -13,6 +13,20 @@ test("startSession syncs after a successful start", async () => {
   assert.equal(synced, 1)
 })
 
+test("startSession forwards the chosen mode and model", async () => {
+  let body: unknown = null
+  const fetchImpl = (async (_url: string, init: { body?: string }) => {
+    body = JSON.parse(String(init.body))
+    return { status: 200, ok: true, json: async () => ({ sessionID: "ses_1" }) }
+  }) as unknown as FetchLike
+  const ok = await startSession("http://h:1", "t", () => {}, undefined, fetchImpl, {
+    agent: "plan",
+    model: { providerID: "deepseek", id: "deepseek-flash" },
+  })
+  assert.equal(ok, true)
+  assert.deepEqual(body, { agent: "plan", model: { providerID: "deepseek", id: "deepseek-flash" } })
+})
+
 test("stopSession syncs only when applied", async () => {
   let synced = 0
   assert.equal(await stopSession("http://h:1", "t", () => { synced++ }, "ses_1", fetchStatus(200, {})), true)
