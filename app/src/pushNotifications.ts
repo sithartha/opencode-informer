@@ -35,8 +35,7 @@ export async function configureNotifications(): Promise<boolean> {
 }
 
 /** Register the option actions for a specific question (options vary per question). */
-export async function registerQuestionCategory(requestID: string, options: string[]): Promise<void> {
-  await Notifications.setNotificationCategoryAsync(`QUESTION_${requestID}`, [
+export async function registerQuestionCategory(requestID: string, options: string[]): Promise<void> {  await Notifications.setNotificationCategoryAsync(`QUESTION_${requestID}`, [
     ...options.slice(0, 4).map((option) => ({ identifier: `${OPTION_PREFIX}${option}`, buttonTitle: option })),
   ])
 }
@@ -66,4 +65,14 @@ export async function dismissNotification(requestID: string): Promise<void> {
       .filter((n) => (n.request.content.data as { requestID?: string })?.requestID === requestID)
       .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
   )
+}
+
+/** The native APNs device token, or null when unavailable (simulator / no permission). */
+export async function getDeviceToken(): Promise<string | null> {
+  try {
+    const token = (await Notifications.getDevicePushTokenAsync()) as { data?: unknown }
+    return typeof token?.data === "string" && token.data ? token.data : null
+  } catch {
+    return null
+  }
 }

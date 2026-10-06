@@ -13,7 +13,8 @@
     "stop": "/stop",
     "close": "/close",
     "options": "/options",
-    "switch": "/switch"
+    "switch": "/switch",
+    "device": "/device"
   },
   "phases": ["running", "waiting-permission", "waiting-answer", "completed", "ended"],
   "streamEvents": [
@@ -52,6 +53,8 @@
     "session.updated": { "required": ["sessionID"] },
     "actionable.resolved": { "required": ["sessionID", "requestID"] },
     "resolution.request": { "required": ["requestID", "action"] },
+    "device.register": { "required": ["token"] },
+    "push.notification": { "required": ["aps"] },
     "doorbell": { "required": ["kind"] },
     "pair.request": { "required": ["deviceName"] },
     "pair.status": { "required": ["status"] }
@@ -157,6 +160,19 @@
     "resolution.request": {
       "schema": "resolution.request",
       "value": { "requestID": "req_1", "action": "allow" }
+    },
+    "device.register": {
+      "schema": "device.register",
+      "value": { "token": "a1b2c3", "platform": "ios" }
+    },
+    "push.permission": {
+      "schema": "push.notification",
+      "value": {
+        "aps": { "alert": { "title": "OpenCode needs approval", "body": "Allow Bash: rm -rf build/" }, "category": "PERMISSION_REQUEST" },
+        "kind": "permission",
+        "requestID": "req_1",
+        "sessionID": "ses_1"
+      }
     },
     "doorbell.permission": {
       "schema": "doorbell",

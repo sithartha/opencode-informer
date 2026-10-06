@@ -3,12 +3,14 @@ import assert from "node:assert/strict"
 import {
   beginPairing,
   closeUrl,
+  deviceUrl,
   eventsUrl,
   fetchOptions,
   fetchState,
   optionsUrl,
   pollPairing,
   postClose,
+  postDevice,
   postPrompt,
   postResolution,
   postStart,
@@ -126,4 +128,15 @@ test("postSwitch posts the target", async () => {
   }) as unknown as FetchLike
   assert.equal(await postSwitch("http://h:1", "t", "ses_1", { agent: "plan" }, fetchImpl), true)
   assert.deepEqual(seen, { url: "http://h:1/switch", body: { sessionID: "ses_1", agent: "plan" } })
+})
+
+test("postDevice registers the APNs token", async () => {
+  let seen: unknown = null
+  const fetchImpl = (async (url: string, init: { body?: string }) => {
+    seen = { url, body: JSON.parse(String(init.body)) }
+    return { status: 200, ok: true, json: async () => ({}) }
+  }) as unknown as FetchLike
+  assert.equal(deviceUrl("http://h:1"), "http://h:1/device")
+  assert.equal(await postDevice("http://h:1", "t", "devtok", fetchImpl), true)
+  assert.deepEqual(seen, { url: "http://h:1/device", body: { token: "devtok", platform: "ios" } })
 })

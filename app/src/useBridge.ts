@@ -4,7 +4,7 @@ import Constants from "expo-constants"
 import * as Notifications from "expo-notifications"
 import { applyEvent, emptyState, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
 import { connectionReducer, initialConnection } from "./connection"
-import { beginPairing, baseUrl, fetchState, pollPairing, postPrompt, postResolution, type ModelRef, type SessionOptions } from "./bridgeClient"
+import { beginPairing, baseUrl, fetchState, pollPairing, postDevice, postPrompt, postResolution, type ModelRef, type SessionOptions } from "./bridgeClient"
 import * as sessionActions from "./sessionActions"
 import { BleClient } from "./bleClient"
 import { BridgeStream } from "./sse"
@@ -21,7 +21,7 @@ import {
 import type { ThemeMode } from "./theme"
 import { reconnectWithToken } from "./reconnect"
 import { actionToResolution, notificationFor, notificationForDoorbell } from "./notifications"
-import { configureNotifications, dismissNotification, presentNotification, registerQuestionCategory } from "./pushNotifications"
+import { configureNotifications, dismissNotification, getDeviceToken, presentNotification, registerQuestionCategory } from "./pushNotifications"
 import { manualBase } from "./manualConnect"
 import { liveActivity } from "./liveActivity"
 import { isStale } from "./staleness"
@@ -97,6 +97,21 @@ export function useBridge() {
   const refresh = useCallback(async () => {
     await syncState()
   }, [syncState])
+
+  // Remote push: report the APNs device token so the Mac can notify us off-LAN.
+  const registerDevice = useCallback(async () => {
+    const base = baseRef.current
+    const token = tokenRef.current
+    if (!base || !token) return
+    const deviceToken = await getDeviceToken()
+    if (!deviceToken) return
+    try {
+      await postDevice(base, token, deviceToken)
+      devLog("device token registered")
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const handleEvent = useCallback((event: ActivityEvent) => {
     devLog("event", event.type)
@@ -210,8 +225,9 @@ export function useBridge() {
       })
       streamRef.current.start()
       dispatch({ type: "connected" })
+      void registerDevice()
     },
-    [handleEvent],
+    [handleEvent, registerDevice],
   )
   fetchAndStreamRef.current = fetchAndStream
 
@@ -433,6 +449,14 @@ export function useBridge() {
     liveActivity.update(appState)
     pendingRef.current = appState.pending
   }, [appState])
+
+  // Re-report the token if APNs rotates it.
+  useEffect(() => {
+    const subscription = Notifications.addPushTokenListener(() => {
+      void registerDevice()
+    })
+    return () => subscription.remove()
+  }, [registerDevice])
 
   // Mark the activity stale once the aggregate has gone unrefreshed too long.
   useEffect(() => {

@@ -17,6 +17,7 @@ export const CONTRACT = {
     close: "/close",
     options: "/options",
     switch: "/switch",
+    device: "/device",
   },
   phases: ["running", "waiting-permission", "waiting-answer", "completed", "ended"],
   streamEvents: [

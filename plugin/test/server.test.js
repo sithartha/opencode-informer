@@ -4,7 +4,7 @@ import http from "node:http"
 import { buildBridge } from "../src/bridge.js"
 
 function newBridge(overrides = {}) {
-  const calls = { permission: [], question: [], prompt: [], start: [], stop: [], close: [], switch: [] }
+  const calls = { permission: [], question: [], prompt: [], start: [], stop: [], close: [], switch: [], apns: [] }
   const bridge = buildBridge({
     config: { port: 0, keepaliveMs: 30, host: "127.0.0.1" },
     applyPermission: async (args) => calls.permission.push(args),
@@ -18,6 +18,13 @@ function newBridge(overrides = {}) {
     closeSession: async (args) => calls.close.push(args),
     optionsProvider: async () => ({ agents: ["build", "plan"], models: [{ providerID: "deepseek", id: "deepseek-flash" }] }),
     switchSession: async (args) => calls.switch.push(args),
+    apns: {
+      enabled: true,
+      send: async (token, payload) => {
+        calls.apns.push({ token, payload })
+        return { ok: true, status: 200 }
+      },
+    },
     ...overrides,
   })
   return { bridge, calls }
@@ -350,4 +357,47 @@ test("POST /switch requires a target", async (t) => {
     body: JSON.stringify({ sessionID: "ses_1" }),
   })
   assert.equal(res.status, 400)
+})
+
+test("POST /device stores the token and a push is sent when no client is connected", async (t) => {
+  const { bridge, calls, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const res = await fetch(`http://127.0.0.1:${port}/device`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ token: "devtok", platform: "ios" }),
+  })
+  assert.equal(res.status, 200)
+  assert.ok(bridge.devices.has("devtok"))
+
+  bridge.handleEvent({ type: "permission.asked", data: { sessionID: "ses_1", id: "req_1", action: "bash", resources: ["rm -rf /"] } })
+  await waitFor(() => calls.apns.length === 1)
+  assert.equal(calls.apns.length, 1)
+  assert.equal(calls.apns[0].token, "devtok")
+  assert.match(calls.apns[0].payload.aps.alert.title, /approval/)
+  assert.equal(calls.apns[0].payload.requestID, "req_1")
+})
+
+test("POST /device requires a token", async (t) => {
+  const { bridge, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  const res = await fetch(`http://127.0.0.1:${port}/device`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({}),
+  })
+  assert.equal(res.status, 400)
+})
+
+test("no APNs push while a client is streaming", async (t) => {
+  const { bridge, calls, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  bridge.devices.set("devtok", { platform: "ios" })
+  const state = await openSSE(port, token)
+  await waitFor(() => bridge.server.clientCount() > 0)
+
+  bridge.handleEvent({ type: "form.created", data: { sessionID: "ses_1", form: { id: "f1", sessionID: "ses_1", title: "Q", fields: [] } } })
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(calls.apns.length, 0)
+  state.res.destroy()
 })
