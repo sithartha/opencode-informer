@@ -22,7 +22,17 @@ export function activityTitle(agg: Aggregate): string {
  * Map the aggregate to the Live Activity's title/subtitle. Waiting states are
  * prefixed with a warning mark so they read as distinct from working.
  */
-export function activityState(agg: Aggregate, stale = false): LiveActivityState {
+export function activityState(agg: Aggregate, stale = false, disconnected = false): LiveActivityState {
+  // No reachable Mac: say so plainly instead of showing stale counts.
+  if (disconnected) {
+    return {
+      title: "No connection",
+      subtitle: "Can't reach OpenCode on your Mac",
+      imageName: "oi",
+      dynamicIslandImageName: "oi",
+    }
+  }
+
   // Plain text: the widget draws the small colored dots itself and parses these
   // lines ("<count> <label>"), keeping the payload human-readable as a fallback.
   const lines: string[] = []

@@ -62,16 +62,21 @@ export function useBridge() {
   const fetchBusyRef = useRef(false)
   const lastFetchMsRef = useRef(0)
   const pendingRef = useRef<Record<string, PendingRequest>>({})
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectDelayRef = useRef(2000)
+  const disconnectedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fetchAndStreamRef = useRef<((base: string, token: string) => Promise<void>) | null>(null)
+  const scheduleReconnectRef = useRef<() => void>(() => {})
 
   // Single-flight, throttled snapshot sync so reconnects and repeated doorbells
   // cannot hammer the Mac with requests.
-  const syncState = useCallback(async (): Promise<Awaited<ReturnType<typeof fetchState>> | null> => {
+  const syncState = useCallback(async (force = false): Promise<Awaited<ReturnType<typeof fetchState>> | null> => {
     const base = baseRef.current
     const token = tokenRef.current
     if (!base || !token) return null
     const now = Date.now()
     if (fetchBusyRef.current) return null
-    if (now - lastFetchMsRef.current < 1000) return null
+    if (!force && now - lastFetchMsRef.current < 1000) return null
     fetchBusyRef.current = true
     lastFetchMsRef.current = now
     try {
@@ -79,6 +84,7 @@ export function useBridge() {
       setAppState((prev) => ({ ...stateFromSnapshot(snapshot), recent: prev.recent }))
       lastRefreshRef.current = Date.now()
       liveActivity.setStale(false)
+      liveActivity.setDisconnected(false)
       return snapshot
     } catch {
       liveActivity.setStale(true)
@@ -130,6 +136,12 @@ export function useBridge() {
     devLog("doorbell", payload)
     const kind = String((payload && payload.kind) || "")
 
+    // A manual "Refresh" from the Mac helper: force a full resync.
+    if (kind === "refresh") {
+      await syncState(true)
+      return
+    }
+
     // Completions are informational and have no request to verify.
     if (kind === "completion") {
       const plan = notificationForDoorbell(payload)
@@ -179,13 +191,47 @@ export function useBridge() {
       setAppState(stateFromSnapshot(snapshot))
       lastRefreshRef.current = Date.now()
       liveActivity.setStale(false)
+      liveActivity.setDisconnected(false)
+      if (disconnectedTimerRef.current) {
+        clearTimeout(disconnectedTimerRef.current)
+        disconnectedTimerRef.current = null
+      }
+      reconnectDelayRef.current = 2000
       streamRef.current?.stop()
-      streamRef.current = new BridgeStream(base, token, handleEvent, () => dispatch({ type: "disconnected" }))
+      streamRef.current = new BridgeStream(base, token, handleEvent, () => {
+        dispatch({ type: "disconnected" })
+        scheduleReconnectRef.current()
+        if (!disconnectedTimerRef.current) {
+          disconnectedTimerRef.current = setTimeout(() => {
+            disconnectedTimerRef.current = null
+            liveActivity.setDisconnected(true)
+          }, 5000)
+        }
+      })
       streamRef.current.start()
       dispatch({ type: "connected" })
     },
     [handleEvent],
   )
+  fetchAndStreamRef.current = fetchAndStream
+
+  // Reopen the stream (and resync) with backoff after a drop, so cards and the
+  // Live Activity recover on their own once the Mac is reachable again.
+  scheduleReconnectRef.current = () => {
+    if (reconnectTimerRef.current) return
+    reconnectTimerRef.current = setTimeout(async () => {
+      reconnectTimerRef.current = null
+      const base = baseRef.current
+      const token = tokenRef.current
+      if (!base || !token) return
+      try {
+        await fetchAndStreamRef.current?.(base, token)
+      } catch {
+        reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000)
+        scheduleReconnectRef.current()
+      }
+    }, reconnectDelayRef.current)
+  }
 
   // Reuse a stored token or pair over HTTP, then stream. Shared by BLE and manual connect.
   const establish = useCallback(

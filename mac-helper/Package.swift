@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "OpenIslandBLE",
-            path: "Sources/OpenIslandBLE"
+            path: "Sources/OpenIslandBLE",
+            linkerSettings: [.linkedFramework("ServiceManagement")]
         )
     ]
 )

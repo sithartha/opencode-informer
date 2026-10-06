@@ -48,7 +48,7 @@ export function buildBridge(options = {}) {
   const applyQuestion = options.applyQuestion || (async () => {})
   const applyPrompt = options.applyPrompt || (async () => {})
   const startSessionRaw = options.startSession || (async () => ({}))
-  const stopSession = options.stopSession || (async () => {})
+  const stopSessionRaw = options.stopSession || (async () => {})
   const closeSession = options.closeSession || (async () => {})
   const optionsProvider = options.optionsProvider || (async () => ({ agents: [], models: [] }))
   const switchSessionRaw = options.switchSession || (async () => {})
@@ -77,6 +77,12 @@ export function buildBridge(options = {}) {
       pendingIdle.set(id, timer)
     }
     return session
+  }
+  // A successful stop leaves the session idle; reflect it at once (OpenCode does
+  // not always emit an idle event on interrupt).
+  const stopSession = async (args) => {
+    await stopSessionRaw(args)
+    handleEvent({ type: "session.idle.silent", data: { sessionID: args.sessionID } })
   }
 
   let server

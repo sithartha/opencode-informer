@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ServiceManagement
 
 final class AppController: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
@@ -79,11 +80,48 @@ final class AppController: NSObject, NSApplicationDelegate {
         copy.target = self
         menu.addItem(copy)
 
+        let refresh = NSMenuItem(title: "Refresh phone", action: #selector(refreshPhone), keyEquivalent: "r")
+        refresh.target = self
+        menu.addItem(refresh)
+
+        let login = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        login.target = self
+        login.state = launchAtLoginEnabled ? .on : .off
+        menu.addItem(login)
+
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
 
         statusItem?.menu = menu
+    }
+
+    private var launchAtLoginEnabled: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    /// Ask the phone to resync every card from the Mac (a "refresh" doorbell).
+    @objc private func refreshPhone() {
+        ble.deliverDoorbell(["kind": "refresh"])
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled {
+                try service.unregister()
+            } else {
+                try service.register()
+            }
+        } catch {
+            bleStatus = "login item failed: \(error.localizedDescription)"
+        }
+        // Status updates asynchronously; refresh the checkmark shortly after.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            self?.rebuildMenu()
+        }
     }
 
     @objc private func copyRendezvous() {

@@ -4,14 +4,15 @@ import { LiveActivityController } from "../src/liveActivityController"
 import { emptyState, stateFromSnapshot, type Session } from "../src/events"
 
 function fakeApi() {
-  const calls = { start: 0, update: 0, stop: 0, lastSubtitle: "" }
+  const calls = { start: 0, update: 0, stop: 0, lastTitle: "", lastSubtitle: "" }
   const api = {
     startActivity: () => {
       calls.start += 1
       return "act-1"
     },
-    updateActivity: (_id: string, state: { subtitle?: string }) => {
+    updateActivity: (_id: string, state: { title?: string; subtitle?: string }) => {
       calls.update += 1
+      calls.lastTitle = state.title ?? ""
       calls.lastSubtitle = state.subtitle ?? ""
     },
     stopActivity: () => {
@@ -70,4 +71,24 @@ test("disabled does not start and enabling renders", () => {
 
   controller.setEnabled(true)
   assert.equal(calls.start, 1)
+})
+
+test("a disconnected flag shows no connection while an activity is running", () => {
+  const { api, calls } = fakeApi()
+  const controller = new LiveActivityController(api)
+
+  controller.update(twoRunning())
+  controller.setDisconnected(true)
+  assert.equal(calls.lastTitle, "No connection")
+  assert.match(calls.lastSubtitle, /OpenCode/)
+})
+
+test("disconnected keeps the activity alive even at zero", () => {
+  const { api, calls } = fakeApi()
+  const controller = new LiveActivityController(api)
+
+  controller.update(twoRunning())
+  controller.setDisconnected(true)
+  controller.update(emptyState())
+  assert.equal(calls.stop, 0)
 })

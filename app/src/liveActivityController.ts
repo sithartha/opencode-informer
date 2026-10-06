@@ -20,6 +20,7 @@ export class LiveActivityController {
   private id: string | null = null
   private enabled = true
   private stale = false
+  private disconnected = false
   private last: AppState | null = null
 
   constructor(private readonly api: ActivityApi) {}
@@ -43,6 +44,12 @@ export class LiveActivityController {
     if (this.last) this.render(this.last)
   }
 
+  setDisconnected(disconnected: boolean): void {
+    if (this.disconnected === disconnected) return
+    this.disconnected = disconnected
+    if (this.last) this.render(this.last)
+  }
+
   update(state: AppState): void {
     this.last = state
     this.render(state)
@@ -62,12 +69,13 @@ export class LiveActivityController {
     if (!this.enabled) return
 
     const agg = aggregate(state)
-    if (agg.total === 0) {
+    // Keep a running activity around to show "No connection"; otherwise end it.
+    if (agg.total === 0 && !(this.disconnected && this.id)) {
       this.stop()
       return
     }
 
-    const content = activityState(agg, this.stale)
+    const content = activityState(agg, this.stale, this.disconnected)
     if (!this.id) {
       const id = this.api.startActivity(content, LIVE_ACTIVITY_CONFIG)
       if (id) this.id = id

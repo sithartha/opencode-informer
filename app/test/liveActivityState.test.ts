@@ -43,3 +43,9 @@ test("uses the OI mark", () => {
   const state = activityState({ total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 })
   assert.equal(state.imageName, "oi")
 })
+
+test("disconnected state says there is no connection", () => {
+  const state = activityState({ total: 2, running: 2, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }, false, true)
+  assert.equal(state.title, "No connection")
+  assert.match(state.subtitle ?? "", /Can't reach OpenCode/)
+})
