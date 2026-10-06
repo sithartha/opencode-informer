@@ -1,4 +1,4 @@
-# Open Island BLE Helper
+# OpenCode Informer Helper (macOS)
 
 Standalone macOS menu-bar helper that acts as a Bluetooth Low Energy **peripheral**
 so the phone can be woken when an agent needs attention. It owns no business logic:
@@ -17,32 +17,32 @@ hosts the pairing approval prompt.
 ```bash
 cd mac-helper
 swift build
-./scripts/package-app.sh          # produces "dist/OpenIsland BLE.app"
-open "dist/OpenIsland BLE.app"
+./scripts/package-app.sh          # produces "dist/OpenCode Informer.app"
+open "dist/OpenCode Informer.app"
 ```
 
-The menu-bar item ("OI") shows BLE status, the rendezvous address, and a Quit action.
+The menu-bar item ("OI") shows BLE status and the rendezvous address, and offers:
 
-## Run at login
+- **Copy rendezvous** — copies the `host:port` the bridge listens on.
+- **Refresh phone** — asks the phone to resync every card from the Mac.
+- **Launch at Login** — toggles starting the helper automatically at login (modern
+  login-item API, no manual Login Items setup).
+- **Quit**.
 
-Add the bundled app to **System Settings -> General -> Login Items**, or install a
-LaunchAgent that opens it:
+## Release (signed + notarized .dmg)
 
-```xml
-<!-- ~/Library/LaunchAgents/app.openisland.ble-helper.plist -->
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>app.openisland.ble-helper</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/Applications/Open Island BLE.app/Contents/MacOS/OpenIslandBLE</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-</dict>
-</plist>
+```bash
+# Requires a "Developer ID Application" certificate and an app-specific password file.
+./scripts/release-helper.sh
 ```
+
+This builds, signs with hardened runtime, packages a `.dmg` containing the app and an
+**Applications** shortcut for drag-install, notarizes it, and staples the ticket.
+
+## Run at login (manual alternative)
+
+Use the **Launch at Login** menu item, or add the app in
+**System Settings → General → Login Items**.
 
 ## Permissions
 
@@ -58,20 +58,4 @@ The plugin POSTs a doorbell to `http://127.0.0.1:38964/ring`:
 { "kind": "permission", "requestID": "req_1", "sessionID": "ses_1", "title": "Allow Bash" }
 ```
 
-`kind` is `permission`, `question`, `completion`, or `pairing`. On `pairing`, the
-helper shows an Allow/Deny alert and records the answer at the bridge's loopback-only
-`POST /pair/decision`. If no phone is subscribed, doorbells are buffered and flushed
-when a central subscribes.
-
-## Wire contract
-
-Service and characteristic UUIDs, the rendezvous value (`host:port`), and the
-doorbell payload are defined in `../contract/contract.json`.
-
-## Verification status
-
-- Builds (`swift build`) and packages (`scripts/package-app.sh`) — verified.
-- Launches as a menu-bar process and the localhost `/ring` endpoint answers — verified.
-- BLE advertising, rendezvous read, and doorbell notify require a BLE scanner or the
-  phone; CoreBluetooth central does not initialize from a headless shell, so these
-  are verified on-device (tasks 5.2, 5.4, 5.5, 5.6).
+`kind` is one of `permission`, `question`, `completion`, `pairing`, `refresh`.

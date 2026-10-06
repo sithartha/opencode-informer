@@ -55,7 +55,7 @@ final class BLEPeripheral: NSObject, CBPeripheralManagerDelegate {
         manager.add(service)
         manager.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [Contract.serviceUUID],
-            CBAdvertisementDataLocalNameKey: "OpenIsland",
+            CBAdvertisementDataLocalNameKey: "OpenCodeInformer",
         ])
         onStatusChange?("advertising")
     }
@@ -135,7 +135,7 @@ final class BLEPeripheral: NSObject, CBPeripheralManagerDelegate {
     private func startAdvertising() {
         manager?.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [Contract.serviceUUID],
-            CBAdvertisementDataLocalNameKey: "OpenIsland",
+            CBAdvertisementDataLocalNameKey: "OpenCodeInformer",
         ])
     }
 

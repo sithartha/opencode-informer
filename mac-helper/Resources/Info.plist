@@ -3,17 +3,19 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>Open Island BLE</string>
+	<string>OpenCode Informer</string>
 	<key>CFBundleExecutable</key>
-	<string>OpenIslandBLE</string>
+	<string>OpenCodeInformerHelper</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
-	<string>app.openisland.ble-helper</string>
+	<string>ru.opencode.informer.helper</string>
 	<key>CFBundleName</key>
-	<string>Open Island BLE</string>
+	<string>OpenCode Informer</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.0</string>
+	<string>0.3.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
@@ -21,8 +23,8 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Open Island uses Bluetooth to wake your phone when an agent needs attention.</string>
+	<string>OpenCode Informer uses Bluetooth to wake your phone when an agent needs attention.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Open Island receives agent events from OpenCode on this Mac.</string>
+	<string>OpenCode Informer receives agent events from OpenCode on this Mac.</string>
 </dict>
 </plist>

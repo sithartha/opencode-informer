@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Build, sign (Developer ID + hardened runtime), notarize, staple, and package the
-# macOS helper into a distributable .dmg for a GitHub Release.
+# macOS helper into a distributable .dmg with an Applications shortcut for drag-install.
 #
 # Prerequisites:
 #   - A "Developer ID Application" certificate in the login keychain
@@ -23,21 +23,26 @@ BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' Resources/In
 echo "==> Building release"
 swift build -c release
 
-APP="$PWD/dist/OpenIsland BLE.app"
+APP="$PWD/dist/OpenCode Informer.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$PWD/.build/release/OpenIslandBLE" "$APP/Contents/MacOS/OpenIslandBLE"
+cp "$PWD/.build/release/OpenCodeInformerHelper" "$APP/Contents/MacOS/OpenCodeInformerHelper"
 cp "$PWD/Resources/Info.plist" "$APP/Contents/Info.plist"
+cp "$PWD/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 echo "==> Signing with: $IDENTITY"
-codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/MacOS/OpenIslandBLE"
+codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP/Contents/MacOS/OpenCodeInformerHelper"
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
-echo "==> Building dmg"
-DMG="$PWD/dist/OpenIslandBLE-$VERSION.dmg"
+echo "==> Building dmg (with Applications shortcut)"
+DMG="$PWD/dist/OpenCodeInformerHelper-$VERSION.dmg"
 rm -f "$DMG"
-hdiutil create -volname "Open Island BLE" -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/null
+STAGE="$(mktemp -d)"
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create -volname "OpenCode Informer" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+rm -rf "$STAGE"
 codesign --force --timestamp --sign "$IDENTITY" "$DMG"
 
 echo "==> Notarizing (this can take a few minutes)"

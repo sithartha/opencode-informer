@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "OpenIslandBLE",
+    name: "OpenCodeInformerHelper",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "OpenIslandBLE",
-            path: "Sources/OpenIslandBLE",
+            name: "OpenCodeInformerHelper",
+            path: "Sources/OpenCodeInformerHelper",
             linkerSettings: [.linkedFramework("ServiceManagement")]
         )
     ]
