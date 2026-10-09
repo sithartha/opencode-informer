@@ -57,6 +57,7 @@
       "expo-live-activity",
       "./plugins/withLiveActivityView",
       "./plugins/withSceneLifecycle",
+      "./plugins/withDevelopmentTeam",
       [
         "expo-build-properties",
         {
