@@ -3,6 +3,15 @@
 
 const ACTIVE_PHASES = new Set(["running", "waiting-permission", "waiting-answer"])
 const MAX_RESOLVED = 5000
+// Cap the activity text carried in snapshots/notifications while a question keeps
+// appending, so a long back-and-forth cannot grow unbounded.
+const MAX_ACTIVITY = 4000
+
+function appendActivity(existing, next) {
+  if (!existing) return next
+  const combined = `${existing}\n\n${next}`
+  return combined.length > MAX_ACTIVITY ? combined.slice(combined.length - MAX_ACTIVITY) : combined
+}
 
 function ev(type, data) {
   return { type, data }
@@ -33,8 +42,15 @@ function normalizeModel(model) {
 function fieldOptions(field) {
   const options = []
   for (const option of Array.isArray(field && field.options) ? field.options : []) {
-    const label = option && option.label != null ? option.label : option && option.value
-    if (label != null && !options.includes(String(label))) options.push(String(label))
+    if (option == null) continue
+    // OpenCode options are `{ label, value }` objects, but tolerate plain strings.
+    const raw = typeof option === "object" ? option : { label: option }
+    const label = raw.label != null ? String(raw.label) : raw.value != null ? String(raw.value) : ""
+    if (!label || options.some((existing) => existing.label === label)) continue
+    const entry = { label }
+    if (raw.value != null) entry.value = String(raw.value)
+    if (raw.description != null) entry.description = String(raw.description)
+    options.push(entry)
   }
   return options
 }
@@ -95,6 +111,14 @@ export class ActivityModel {
 
   get(id) {
     return this.sessions.get(this.rootSession(id))
+  }
+
+  /** True while the session has an unanswered question form. */
+  questionPending(sessionID) {
+    for (const pending of this.pending.values()) {
+      if (pending.sessionID === sessionID && pending.kind === "question") return true
+    }
+    return false
   }
 
   /**
@@ -181,6 +205,18 @@ export class ActivityModel {
     const payload = (event && event.data) || {}
     const cwd = event && event.location && event.location.directory
     const out = []
+
+    // Adopt a working directory reported by the event envelope so sessions we
+    // only learn about lazily (e.g. after a restart) still show their directory.
+    if (cwd && payload.sessionID && type !== "session.created" && type !== "session.deleted" && !this.isChild(payload.sessionID)) {
+      const root = this.rootSession(payload.sessionID)
+      const session = this.ensureSession(root)
+      if (session && session.cwd !== cwd) {
+        session.cwd = cwd
+        session.updatedAt = Date.now()
+        out.push(ev("session.updated", { sessionID: root, cwd }))
+      }
+    }
 
     switch (type) {
       case "session.created": {
@@ -383,9 +419,24 @@ export class ActivityModel {
         const root = this.rootSession(payload.sessionID)
         const session = this.ensureSession(root)
         if (session && payload.text) {
-          session.lastActivity = payload.text
+          const text = String(payload.text)
+          // While a question is unanswered, keep the text the user is reading:
+          // append the new text instead of replacing it.
+          session.lastActivity = this.questionPending(root) ? appendActivity(session.lastActivity, text) : text
           session.updatedAt = Date.now()
-          out.push(ev("session.activity", { sessionID: root, text: payload.text }))
+          out.push(ev("session.activity", { sessionID: root, text: session.lastActivity }))
+        }
+        return out
+      }
+
+      case "session.cost": {
+        if (this.isChild(payload.sessionID)) return out
+        const session = this.ensureSession(this.rootSession(payload.sessionID))
+        const cost = Number(payload.cost)
+        if (session && Number.isFinite(cost) && session.cost !== cost) {
+          session.cost = cost
+          session.updatedAt = Date.now()
+          out.push(ev("session.cost", { sessionID: session.id, cost }))
         }
         return out
       }
@@ -496,7 +547,8 @@ export class ActivityModel {
         }
         if (session) {
           session.phase = "waiting-answer"
-          session.lastActivity = title
+          // Do not overwrite the activity text the user may be reading; the
+          // question is shown separately and the pre-question text is preserved.
           session.updatedAt = Date.now()
         }
         out.push(ev("question.asked", { sessionID: root, requestID, title, summary, options, allowFreeform, questions }))

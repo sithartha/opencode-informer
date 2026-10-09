@@ -1,5 +1,5 @@
 import * as SecureStore from "expo-secure-store"
-import { DEVICE_NAME_KEY, LIVE_ACTIVITY_KEY, MAC_NAME_KEY, THEME_MODE_KEY, TOKEN_KEY, type TokenStore } from "./tokenStore"
+import { DEVICE_NAME_KEY, LAST_HOST_KEY, LAST_PORT_KEY, LIVE_ACTIVITY_KEY, MAC_NAME_KEY, THEME_MODE_KEY, TOKEN_KEY, type TokenStore } from "./tokenStore"
 
 // SecureStore needs a keychain entitlement. Unsigned builds (e.g. a simulator build with
 // signing disabled) cannot access the keychain, so fall back to an in-memory store to keep
@@ -72,4 +72,37 @@ export function getThemeMode(): Promise<string | null> {
 
 export function setThemeMode(mode: string): Promise<void> {
   return write(THEME_MODE_KEY, mode)
+}
+
+/** The last bridge host/port this phone reached, for connecting again directly. */
+export function getLastHost(): Promise<string | null> {
+  return read(LAST_HOST_KEY)
+}
+
+export function setLastHost(host: string): Promise<void> {
+  return write(LAST_HOST_KEY, host)
+}
+
+export async function getLastPort(): Promise<number | null> {
+  const value = await read(LAST_PORT_KEY)
+  const port = Number(value)
+  return value != null && Number.isInteger(port) && port > 0 && port <= 65535 ? port : null
+}
+
+export function setLastPort(port: number): Promise<void> {
+  return write(LAST_PORT_KEY, String(port))
+}
+
+export async function clearLastAddress(): Promise<void> {
+  await remove(LAST_HOST_KEY)
+  await remove(LAST_PORT_KEY)
+}
+
+/** Generic secure read/write for small internal values (e.g. diagnostics). */
+export function readSecure(key: string): Promise<string | null> {
+  return read(key)
+}
+
+export function writeSecure(key: string, value: string): Promise<void> {
+  return write(key, value)
 }

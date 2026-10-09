@@ -20,6 +20,9 @@ pub const LOCAL_NAME: &str = "OpenCodeInformer";
 /// Bridge endpoint that records the Mac user's pairing decision.
 pub const PAIR_DECISION_PATH: &str = "/pair/decision";
 
+/// Bridge endpoint the helper reads to display the current pairing code.
+pub const PAIR_CODE_PATH: &str = "/pair/code";
+
 /// The machine-readable contract, embedded at build time (`helper/src` → repo root).
 pub const CONTRACT_JSON: &str = include_str!("../../contract/contract.json");
 

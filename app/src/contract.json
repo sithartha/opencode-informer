@@ -1,9 +1,10 @@
 {
-  "version": 1,
+  "version": 3,
   "bridge": { "host": "0.0.0.0", "defaultPort": 38963 },
   "helper": { "host": "127.0.0.1", "defaultPort": 38964, "ringPath": "/ring" },
   "endpoints": {
     "pair": "/pair",
+    "pairCode": "/pair/code",
     "state": "/state",
     "status": "/status",
     "events": "/events",
@@ -19,6 +20,7 @@
     "permission.requested",
     "question.asked",
     "turn.completed",
+    "session.cost",
     "actionable.resolved"
   ],
   "doorbellKinds": ["permission", "question", "completion", "pairing"],
@@ -37,7 +39,9 @@
     "tool.started": { "required": ["sessionID", "tool", "input"] },
     "tool.ended": { "required": ["sessionID", "tool"] },
     "permission.requested": { "required": ["sessionID", "requestID", "title", "summary", "agent"] },
+    "option": { "required": ["label"] },
     "question.asked": { "required": ["sessionID", "requestID", "title", "options"] },
+    "session.cost": { "required": ["sessionID", "cost"] },
     "turn.completed": { "required": ["sessionID", "summary"] },
     "actionable.resolved": { "required": ["sessionID", "requestID"] },
     "resolution.request": { "required": ["requestID", "action"] },
@@ -95,7 +99,10 @@
         "sessionID": "ses_1",
         "requestID": "req_2",
         "title": "Which database should I use?",
-        "options": ["PostgreSQL", "SQLite"]
+        "options": [
+          { "label": "PostgreSQL", "value": "postgres", "description": "Managed relational database" },
+          { "label": "SQLite", "value": "sqlite", "description": "Embedded file database" }
+        ]
       }
     },
     "turn.completed": {

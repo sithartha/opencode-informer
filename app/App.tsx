@@ -7,7 +7,8 @@ import type { PendingRequest, Session } from "./src/events"
 import { aggregate } from "./src/aggregate"
 import { resolveTheme, type ThemeMode } from "./src/theme"
 import { createStyles } from "./src/styles"
-import { BrandMark, ConfirmModal, GradientButton, HeroCard, NeedsAttentionCard, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
+import { joinHostPort } from "./src/manualConnect"
+import { BrandMark, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
 import { DemoScreen } from "./src/DemoScreen"
 import { FadeIn, GlowDot, PressableScale } from "./src/ui"
 
@@ -40,13 +41,19 @@ export default function App() {
     setDeviceName,
     themeMode,
     setThemeMode,
+    pairingCodeRequest,
+    pairingCodeError,
+    submitPairingCode,
+    cancelPairingCode,
+    diagnostic,
   } = useBridge()
 
   const systemScheme = useColorScheme()
   const theme = resolveTheme(themeMode, systemScheme)
   const styles = useMemo(() => createStyles(theme), [theme])
 
-  const [manualHost, setManualHost] = useState(process.env.EXPO_PUBLIC_DEV_HOST ?? "127.0.0.1:38963")
+  const [showManual, setShowManual] = useState(false)
+  const [manualError, setManualError] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState(deviceName)
   const [showSettings, setShowSettings] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -168,19 +175,15 @@ export default function App() {
           <View style={styles.connectBlock}>
             <GradientButton label="Connect to Mac" onPress={() => void connect()} styles={styles} colors={theme.accentGradient} />
             <Text style={styles.hint}>or connect by address (no Bluetooth)</Text>
-            <View style={styles.manualRow}>
-              <TextInput
-                style={styles.input}
-                value={manualHost}
-                onChangeText={setManualHost}
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="host:port"
-                placeholderTextColor={theme.textMuted}
-                keyboardType="url"
-              />
-              <GradientButton label="Connect" onPress={() => void connectManual(manualHost)} styles={styles} colors={theme.accentGradient} />
-            </View>
+            <GradientButton
+              label="Connect by address"
+              onPress={() => {
+                setManualError(null)
+                setShowManual(true)
+              }}
+              styles={styles}
+              colors={theme.accentGradient}
+            />
           </View>
         ) : null}
 
@@ -279,6 +282,12 @@ export default function App() {
               device-name entitlement, so set your own here.
             </Text>
 
+            <Text style={styles.section}>Diagnostics</Text>
+            <Text style={styles.about}>{diagnostic ?? "No issues recorded."}</Text>
+            <Text style={styles.fieldDescription}>
+              Recorded locally to help diagnose unexpected app terminations.
+            </Text>
+
             <Text style={styles.section}>About</Text>
             <Text style={styles.about}>{APP_DESCRIPTION}</Text>
             <Text style={styles.about}>Version 0.1.0</Text>
@@ -302,6 +311,33 @@ export default function App() {
       </Modal>
 
       {showPreview ? <PreviewScreen onClose={() => setShowPreview(false)} theme={theme} styles={styles} resolve={resolve} /> : null}
+
+      <ManualConnectModal
+        visible={showManual}
+        error={manualError}
+        onClose={() => setShowManual(false)}
+        onConnect={(address, port) => {
+          const value = joinHostPort(address, port)
+          if (!value) {
+            setManualError("Enter a valid address and port (1–65535).")
+            return
+          }
+          setManualError(null)
+          setShowManual(false)
+          void connectManual(value)
+        }}
+        theme={theme}
+        styles={styles}
+      />
+
+      <PairingCodeModal
+        visible={pairingCodeRequest !== null}
+        error={pairingCodeError}
+        onSubmit={(code) => void submitPairingCode(code)}
+        onCancel={cancelPairingCode}
+        theme={theme}
+        styles={styles}
+      />
 
       <ConfirmModal
         visible={confirmAction !== null}

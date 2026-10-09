@@ -58,14 +58,25 @@ export type PairResult =
   | { status: "pending"; approvalID: string }
   | { status: "approved"; token: string }
   | { status: "denied" }
+  | { status: "invalid-code" }
+  | { status: "locked-out" }
 
-export async function beginPairing(base: string, deviceName: string, fetchImpl: FetchLike = fetch): Promise<PairResult> {
+export async function beginPairing(
+  base: string,
+  deviceName: string,
+  code: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<PairResult> {
   const res = await fetchImpl(pairUrl(base), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ deviceName }),
+    body: JSON.stringify({ deviceName, code }),
   })
-  if (res.status === 403) return { status: "denied" }
+  if (res.status === 429) return { status: "locked-out" }
+  if (res.status === 403) {
+    const body = (await res.json().catch(() => ({}))) as { status?: string }
+    return body.status === "denied" ? { status: "denied" } : { status: "invalid-code" }
+  }
   const body = (await res.json()) as { status?: string; approvalID?: string; token?: string }
   if (body.token) return { status: "approved", token: body.token }
   return { status: "pending", approvalID: String(body.approvalID) }

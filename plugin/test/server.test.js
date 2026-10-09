@@ -31,12 +31,23 @@ async function startBridge(t, overrides) {
   return { bridge, calls, port }
 }
 
-async function pair(port, bridge) {
-  const begin = await fetch(`http://127.0.0.1:${port}/pair`, {
+async function pairingCode(port) {
+  const res = await fetch(`http://127.0.0.1:${port}/pair/code`)
+  assert.equal(res.status, 200)
+  return (await res.json()).code
+}
+
+async function beginPairing(port, deviceName) {
+  const code = await pairingCode(port)
+  return fetch(`http://127.0.0.1:${port}/pair`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ deviceName: "Test" }),
+    body: JSON.stringify({ deviceName, code }),
   })
+}
+
+async function pair(port, bridge) {
+  const begin = await beginPairing(port, "Test")
   assert.equal(begin.status, 202)
   const { approvalID } = await begin.json()
   bridge.pairing.approve(approvalID)
@@ -98,11 +109,7 @@ test("unauthenticated requests get 401", async (t) => {
 
 test("pairing issues a token only after approval", async (t) => {
   const { bridge, port } = await startBridge(t)
-  const begin = await fetch(`http://127.0.0.1:${port}/pair`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ deviceName: "Test" }),
-  })
+  const begin = await beginPairing(port, "Test")
   const { approvalID } = await begin.json()
 
   const pending = await fetch(`http://127.0.0.1:${port}/pair?approvalID=${approvalID}`)
@@ -118,11 +125,7 @@ test("pairing issues a token only after approval", async (t) => {
 test("the helper approves or denies pairing over loopback", async (t) => {
   const { bridge, port } = await startBridge(t)
 
-  const beginApprove = await fetch(`http://127.0.0.1:${port}/pair`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ deviceName: "Approve me" }),
-  })
+  const beginApprove = await beginPairing(port, "Approve me")
   const approvedID = (await beginApprove.json()).approvalID
   const approve = await fetch(`http://127.0.0.1:${port}/pair/decision`, {
     method: "POST",
@@ -133,11 +136,7 @@ test("the helper approves or denies pairing over loopback", async (t) => {
   const approved = await fetch(`http://127.0.0.1:${port}/pair?approvalID=${approvedID}`)
   assert.equal((await approved.json()).status, "approved")
 
-  const beginDeny = await fetch(`http://127.0.0.1:${port}/pair`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ deviceName: "Deny me" }),
-  })
+  const beginDeny = await beginPairing(port, "Deny me")
   const deniedID = (await beginDeny.json()).approvalID
   await fetch(`http://127.0.0.1:${port}/pair/decision`, {
     method: "POST",
@@ -364,4 +363,82 @@ test("POST /switch requires a target", async (t) => {
     body: JSON.stringify({ sessionID: "ses_1" }),
   })
   assert.equal(res.status, 400)
+})
+
+test("the bridge resolves a session's cost out of band", async (t) => {
+  const { bridge } = await startBridge(t, { getSessionInfo: async () => ({ title: "Costly", cost: 0.5 }) })
+  bridge.handleEvent({ type: "session.created", data: { sessionID: "ses_1" }, location: { directory: "/tmp" } })
+  assert.ok(await waitFor(() => bridge.model.snapshot().sessions[0]?.cost === 0.5, 3000))
+  assert.equal(bridge.model.snapshot().sessions[0].cost, 0.5)
+  assert.equal(bridge.model.snapshot().sessions[0].title, "Costly")
+})
+
+test("the bridge fetches info the first time it sees a session", async (t) => {
+  const seen = []
+  const { bridge } = await startBridge(t, {
+    getSessionInfo: async ({ sessionID }) => {
+      seen.push(sessionID)
+      return { title: "Lazy", cost: 0.2 }
+    },
+  })
+  bridge.handleEvent({ type: "session.tool.called", data: { sessionID: "ses_x", id: "t1", name: "Bash" } })
+  assert.ok(await waitFor(() => seen.includes("ses_x"), 2000))
+  assert.ok(await waitFor(() => bridge.model.snapshot().sessions[0]?.cost === 0.2, 2000))
+})
+
+test("pairing requires the current code", async (t) => {
+  const { port } = await startBridge(t)
+  const missing = await fetch(`http://127.0.0.1:${port}/pair`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceName: "Test" }),
+  })
+  assert.equal(missing.status, 403)
+
+  const code = await pairingCode(port)
+  const wrong = String((Number(code) + 1) % 1000000).padStart(6, "0")
+  const rejected = await fetch(`http://127.0.0.1:${port}/pair`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceName: "Test", code: wrong }),
+  })
+  assert.equal(rejected.status, 403)
+})
+
+test("repeated wrong codes lock the source out", async (t) => {
+  const { port } = await startBridge(t)
+  const code = await pairingCode(port)
+  const wrong = String((Number(code) + 1) % 1000000).padStart(6, "0")
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const res = await fetch(`http://127.0.0.1:${port}/pair`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ deviceName: "Test", code: wrong }),
+    })
+    assert.equal(res.status, 403)
+  }
+  const locked = await fetch(`http://127.0.0.1:${port}/pair`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ deviceName: "Test", code }),
+  })
+  assert.equal(locked.status, 429)
+})
+
+test("the pairing doorbell carries the code and clients never see it", async (t) => {
+  const doorbells = []
+  const { bridge, port } = await startBridge(t, { doorbell: async (payload) => doorbells.push(payload) })
+  const code = await pairingCode(port)
+  const begin = await beginPairing(port, "Phone")
+  assert.equal(begin.status, 202)
+  const pairing = doorbells.find((payload) => payload.kind === "pairing")
+  assert.equal(pairing.code, code)
+
+  // The code appears in no snapshot or non-pairing payload.
+  bridge.handleEvent({ type: "session.created", data: { sessionID: "ses_1" } })
+  assert.equal(JSON.stringify(bridge.model.snapshot()).includes(code), false)
+  assert.equal(
+    doorbells.some((payload) => payload.kind !== "pairing" && JSON.stringify(payload).includes(code)),
+    false,
+  )
 })

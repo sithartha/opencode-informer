@@ -52,6 +52,7 @@ pub fn run() -> anyhow::Result<()> {
         "kind": "pairing",
         "approvalID": "apr_selftest",
         "deviceName": "Selftest Phone",
+        "code": "246810",
     });
     post_json(&format!("{base}{RING_PATH}"), &ring).context("POST /ring")?;
     let page = get_text(&format!("{base}/")).context("GET /")?;
@@ -60,11 +61,20 @@ pub fn run() -> anyhow::Result<()> {
     } else {
         failures.push("approval page did not show the pending device".to_string());
     }
+    if page.contains("246810") {
+        println!("[selftest] approval page shows the pairing code: ok");
+    } else {
+        failures.push("approval page did not show the pairing code".to_string());
+    }
 
-    // 5. Doorbell fan-out.
+    // 5. Doorbell fan-out never carries the pairing code.
     match doorbell_rx.recv_timeout(Duration::from_secs(2)) {
         Ok(value) if value.get("kind").and_then(Value::as_str) == Some("pairing") => {
-            println!("[selftest] doorbell forwarded to the peripheral channel: ok");
+            if value.get("code").is_some() {
+                failures.push("doorbell forwarded the pairing code to the client".to_string());
+            } else {
+                println!("[selftest] doorbell forwarded without the pairing code: ok");
+            }
         }
         Ok(value) => failures.push(format!("unexpected doorbell payload: {value}")),
         Err(err) => failures.push(format!("no doorbell received: {err}")),
@@ -112,12 +122,18 @@ fn start_stub_bridge() -> anyhow::Result<(u16, Receiver<Value>)> {
     let (tx, rx) = channel::<Value>();
     thread::spawn(move || {
         for mut request in server.incoming_requests() {
-            let mut body = String::new();
-            if request.method() == &Method::Post {
+            let method = request.method().clone();
+            let url = request.url().to_string();
+            if method == Method::Post {
+                let mut body = String::new();
                 let _ = request.as_reader().read_to_string(&mut body);
                 let _ = tx.send(Value::String(body));
+                let _ = request.respond(Response::from_string("ok"));
+            } else if url.starts_with("/pair/code") {
+                let _ = request.respond(Response::from_string("{\"code\":\"246810\"}"));
+            } else {
+                let _ = request.respond(Response::from_string("ok"));
             }
-            let _ = request.respond(Response::from_string("ok"));
         }
     });
     Ok((port, rx))

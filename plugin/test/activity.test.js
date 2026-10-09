@@ -58,15 +58,77 @@ test("question transitions to waiting-answer and exposes the options", () => {
   apply(model, [created("ses_1")])
   const asked = model.apply({
     type: "form.created",
-    data: { sessionID: "ses_1", form: { id: "req_2", sessionID: "ses_1", title: "Which database?", fields: [{ key: "db", options: [{ label: "PostgreSQL" }, { label: "SQLite" }] }] } },
+    data: { sessionID: "ses_1", form: { id: "req_2", sessionID: "ses_1", title: "Which database?", fields: [{ key: "db", options: [{ label: "PostgreSQL", description: "Managed" }, { label: "SQLite" }] }] } },
   })
   assert.equal(asked[0].type, "question.asked")
-  assert.deepEqual(asked[0].data.options, ["PostgreSQL", "SQLite"])
+  assert.deepEqual(asked[0].data.options, [{ label: "PostgreSQL", description: "Managed" }, { label: "SQLite" }])
   assert.equal(model.snapshot().sessions[0].phase, "waiting-answer")
 
   const replied = model.apply({ type: "form.replied", data: { sessionID: "ses_1", form: { id: "req_2" } } })
   assert.equal(replied[0].type, "actionable.resolved")
   assert.equal(model.snapshot().sessions[0].phase, "running")
+})
+
+test("a question does not overwrite the message before it", () => {
+  const model = new ActivityModel()
+  apply(model, [
+    created("ses_1"),
+    { type: "session.text.ended", data: { sessionID: "ses_1", text: "Here is the long answer" } },
+    {
+      type: "form.created",
+      data: { sessionID: "ses_1", form: { id: "req_2", title: "Pick one", fields: [{ key: "q0", title: "Pick one", description: "Details here", options: [{ label: "A" }] }] } },
+    },
+  ])
+  assert.equal(model.snapshot().sessions[0].lastActivity, "Here is the long answer")
+})
+
+test("activity text is appended while a question is pending", () => {
+  const model = new ActivityModel()
+  apply(model, [
+    created("ses_1"),
+    { type: "session.text.ended", data: { sessionID: "ses_1", text: "First part" } },
+    { type: "form.created", data: { sessionID: "ses_1", form: { id: "req_2", fields: [{ key: "q0", options: [{ label: "A" }] }] } } },
+    { type: "session.text.ended", data: { sessionID: "ses_1", text: "Second part" } },
+  ])
+  assert.equal(model.snapshot().sessions[0].lastActivity, "First part\n\nSecond part")
+})
+
+test("activity text replaces again once the question is resolved", () => {
+  const model = new ActivityModel()
+  apply(model, [
+    created("ses_1"),
+    { type: "session.text.ended", data: { sessionID: "ses_1", text: "First part" } },
+    { type: "form.created", data: { sessionID: "ses_1", form: { id: "req_2", fields: [{ key: "q0", options: [{ label: "A" }] }] } } },
+    { type: "form.replied", data: { sessionID: "ses_1", form: { id: "req_2" } } },
+    { type: "session.text.ended", data: { sessionID: "ses_1", text: "Fresh" } },
+  ])
+  assert.equal(model.snapshot().sessions[0].lastActivity, "Fresh")
+})
+
+test("session cost is tracked and exposed in the snapshot", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_1")])
+  const out = model.apply({ type: "session.cost", data: { sessionID: "ses_1", cost: 0.25 } })
+  assert.equal(out[0].type, "session.cost")
+  assert.equal(out[0].data.cost, 0.25)
+  assert.equal(model.snapshot().sessions[0].cost, 0.25)
+
+  // A repeat of the same cost emits nothing; a change emits again.
+  assert.equal(model.apply({ type: "session.cost", data: { sessionID: "ses_1", cost: 0.25 } }).length, 0)
+  const changed = model.apply({ type: "session.cost", data: { sessionID: "ses_1", cost: 0.5 } })
+  assert.equal(changed[0].data.cost, 0.5)
+})
+
+test("a lazily adopted session gets its working directory", () => {
+  const model = new ActivityModel()
+  // No session.created; a later event carries the directory in the envelope.
+  const out = model.apply({
+    type: "session.execution.started",
+    data: { sessionID: "ses_1" },
+    location: { directory: "/Users/dev/project" },
+  })
+  assert.equal(model.snapshot().sessions[0].cwd, "/Users/dev/project")
+  assert.ok(out.some((event) => event.type === "session.updated"))
 })
 
 test("turn completion and session end move the session out of the active count", () => {
@@ -118,7 +180,7 @@ test("snapshot includes pending permissions and questions", () => {
   assert.equal(permission.sessionID, "ses_1")
   assert.ok(permission.title)
   const question = snapshot.pending.find((p) => p.requestID === "req_2")
-  assert.deepEqual(question.options, ["Postgres"])
+  assert.deepEqual(question.options, [{ label: "Postgres" }])
 })
 
 test("a new request supersedes a session's previous pending", () => {
@@ -273,7 +335,7 @@ test("form.created prefers the field title over the generic form title", () => {
   ])
   const asked = out.find((e) => e.type === "question.asked")
   assert.equal(asked.data.title, "Real question")
-  assert.deepEqual(asked.data.options, ["A"])
+  assert.deepEqual(asked.data.options, [{ label: "A", value: "A" }])
 })
 
 test("form.created flags a custom field as free-form", () => {
@@ -331,14 +393,14 @@ test("form.created with several fields exposes every question", () => {
     key: "q0",
     title: "Deploy target?",
     summary: undefined,
-    options: ["Staging", "Production"],
+    options: [{ label: "Staging", value: "staging" }, { label: "Production", value: "prod" }],
     allowFreeform: false,
   })
   assert.equal(asked.data.questions[1].key, "q1")
   assert.equal(asked.data.questions[1].allowFreeform, true)
   // The flat fields mirror the first question for older clients.
   assert.equal(asked.data.title, "Deploy target?")
-  assert.deepEqual(asked.data.options, ["Staging", "Production"])
+  assert.deepEqual(asked.data.options, [{ label: "Staging", value: "staging" }, { label: "Production", value: "prod" }])
   // The snapshot carries every question so a reconnect can answer the whole form.
   assert.equal(model.snapshot().pending[0].questions.length, 2)
 })

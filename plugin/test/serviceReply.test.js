@@ -23,6 +23,18 @@ test("buildFormAnswer handles a multiselect field", () => {
   assert.deepEqual(buildFormAnswer(field, "A, B"), ["a", "b"])
 })
 
+test("buildFormAnswer accepts plain string options", () => {
+  const field = { key: "db", options: ["PostgreSQL", "SQLite"] }
+  assert.equal(buildFormAnswer(field, "SQLite"), "SQLite")
+  assert.equal(buildFormAnswer(field, "sqlite"), "SQLite")
+})
+
+test("buildFormAnswer accepts the object shape used on the wire", () => {
+  const field = { key: "db", options: [{ label: "PostgreSQL", value: "pg", description: "Managed" }] }
+  assert.equal(buildFormAnswer(field, "PostgreSQL"), "pg")
+  assert.equal(buildFormAnswer(field, "pg"), "pg")
+})
+
 test("replies post to the local service with basic auth", async () => {
   const dir = mkdtempSync(join(tmpdir(), "oc-service-"))
   mkdirSync(join(dir, "opencode"))

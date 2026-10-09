@@ -2,29 +2,38 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { AppState as RNAppState, Vibration } from "react-native"
 import Constants from "expo-constants"
 import * as Notifications from "expo-notifications"
-import { applyEvent, emptyState, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
+import { applyEvent, emptyState, parseOptions, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
 import { connectionReducer, initialConnection } from "./connection"
 import { beginPairing, baseUrl, fetchState, pollPairing, postAnswers, postPrompt, postResolution, type ModelRef, type SessionOptions } from "./bridgeClient"
 import * as sessionActions from "./sessionActions"
 import { BleClient } from "./bleClient"
 import { BridgeStream } from "./sse"
 import {
+  clearLastAddress,
   getDeviceName,
+  getLastHost,
+  getLastPort,
   getLiveActivityEnabled,
   getThemeMode,
+  readSecure,
   secureTokenStore,
   setDeviceName as persistDeviceName,
+  setLastHost,
+  setLastPort,
   setLiveActivityEnabled,
   setMacName,
   setThemeMode as persistThemeMode,
+  writeSecure,
 } from "./secureTokenStore"
 import type { ThemeMode } from "./theme"
 import { reconnectWithToken } from "./reconnect"
 import { actionToResolution, isAttentionEvent, notificationFor, notificationForDoorbell } from "./notifications"
 import { configureNotifications, dismissNotification, presentNotification, registerQuestionCategory } from "./pushNotifications"
 import { manualBase } from "./manualConnect"
-import { liveActivity } from "./liveActivity"
+import { liveActivity, endStaleLiveActivity } from "./liveActivity"
 import { isStale } from "./staleness"
+import { DIAGNOSTIC_KEY } from "./tokenStore"
+import { createDiagnostics, describeDiagnostic, runGuarded } from "./diagnostics"
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const PAIR_POLL_INTERVAL_MS = 2000
@@ -45,6 +54,24 @@ export function useBridge() {
   const [liveActivityEnabled, setLiveActivityEnabledState] = useState(true)
   const [deviceName, setDeviceNameState] = useState(Constants.deviceName || "iPhone")
   const [themeMode, setThemeModeState] = useState<ThemeMode>("system")
+  const [pairingCodeRequest, setPairingCodeRequest] = useState<string | null>(null)
+  const [pairingCodeError, setPairingCodeError] = useState<string | null>(null)
+  const [diagnostic, setDiagnostic] = useState<string | null>(null)
+  const diagnosticsRef = useRef(
+    createDiagnostics({
+      get: () => readSecure(DIAGNOSTIC_KEY),
+      set: (value) => writeSecure(DIAGNOSTIC_KEY, value),
+    }),
+  )
+
+  // Run a background task, recording any failure instead of letting it escape.
+  const guard = useCallback(
+    (work: () => Promise<unknown>) =>
+      runGuarded(work, (error) => {
+        void diagnosticsRef.current.error(error, false)
+      }),
+    [],
+  )
   const deviceNameRef = useRef(Constants.deviceName || "iPhone")
 
   const bleRef = useRef<BleClient | null>(null)
@@ -76,7 +103,7 @@ export function useBridge() {
     if (!base || !token) return null
     const now = Date.now()
     if (fetchBusyRef.current) return null
-    if (!force && now - lastFetchMsRef.current < 1000) return null
+    if (!force && now - lastFetchMsRef.current < 400) return null
     fetchBusyRef.current = true
     lastFetchMsRef.current = now
     try {
@@ -111,7 +138,7 @@ export function useBridge() {
       const requestID = String((event.data as { requestID?: string }).requestID ?? "")
       if (requestID) {
         notifiedRef.current.delete(requestID)
-        void dismissNotification(requestID)
+        void guard(() => dismissNotification(requestID))
       }
       return
     }
@@ -123,12 +150,12 @@ export function useBridge() {
       notifiedRef.current.add(plan.requestID)
     }
     if (plan.category === "QUESTION" && plan.requestID) {
-      const options = ((event.data as { options?: unknown[] }).options ?? []).map(String)
-      void registerQuestionCategory(plan.requestID, options).then(() => presentNotification(plan))
+      const options = parseOptions((event.data as { options?: unknown }).options).map((option) => option.label)
+      void guard(() => registerQuestionCategory(plan.requestID!, options).then(() => presentNotification(plan)))
     } else {
-      void presentNotification(plan)
+      void guard(() => presentNotification(plan))
     }
-  }, [])
+  }, [guard])
 
   const handleDoorbell = useCallback(async (payload: Record<string, unknown> | null) => {
     // Deduplicate repeated doorbells for the same event within a short window.
@@ -150,7 +177,7 @@ export function useBridge() {
     // Completions are informational and have no request to verify.
     if (kind === "completion") {
       const plan = notificationForDoorbell(payload)
-      if (plan) void presentNotification(plan)
+      if (plan) void guard(() => presentNotification(plan))
       return
     }
 
@@ -163,29 +190,33 @@ export function useBridge() {
     notifiedRef.current.add(request.requestID)
 
     if (request.kind === "question") {
-      const options = request.options ?? []
-      void registerQuestionCategory(request.requestID, options).then(() =>
+      const options = (request.options ?? []).map((option) => option.label)
+      void guard(() =>
+        registerQuestionCategory(request.requestID, options).then(() =>
+          presentNotification({
+            category: "QUESTION",
+            title: request.title,
+            body: options.join(" / "),
+            actions: options.map((option) => ({ identifier: `OPTION:${option}`, title: option })),
+            requestID: request.requestID,
+          }),
+        ),
+      )
+    } else {
+      void guard(() =>
         presentNotification({
-          category: "QUESTION",
-          title: request.title,
-          body: options.join(" / "),
-          actions: options.map((option) => ({ identifier: `OPTION:${option}`, title: option })),
+          category: "PERMISSION_REQUEST",
+          title: "OpenCode needs approval",
+          body: `${request.title}${request.summary ? `: ${request.summary}` : ""}`,
+          actions: [
+            { identifier: "ALLOW", title: "Allow" },
+            { identifier: "DENY", title: "Deny" },
+          ],
           requestID: request.requestID,
         }),
       )
-    } else {
-      void presentNotification({
-        category: "PERMISSION_REQUEST",
-        title: "OpenCode needs approval",
-        body: `${request.title}${request.summary ? `: ${request.summary}` : ""}`,
-        actions: [
-          { identifier: "ALLOW", title: "Allow" },
-          { identifier: "DENY", title: "Deny" },
-        ],
-        requestID: request.requestID,
-      })
     }
-  }, [syncState])
+  }, [guard, syncState])
 
   const fetchAndStream = useCallback(
     async (base: string, token: string) => {
@@ -238,22 +269,38 @@ export function useBridge() {
     }, reconnectDelayRef.current)
   }
 
-  // Reuse a stored token or pair over HTTP, then stream. Shared by BLE and manual connect.
+  // Remember where the last bridge was so the next launch can skip discovery.
+  const rememberAddress = useCallback(async (base: string) => {
+    const match = base.match(/^https?:\/\/([^:/]+):(\d+)$/)
+    if (!match) return
+    await setLastHost(match[1])
+    await setLastPort(Number(match[2]))
+  }, [])
+
+  // Reuse a stored token, or pair over HTTP with the Mac-shown code. Shared by
+  // BLE discovery, the remembered address, and manual connect.
   const establish = useCallback(
-    async (base: string) => {
+    async (base: string, code?: string): Promise<"connected" | "needs-code"> => {
       devLog("establish", base)
       await configureNotifications()
       devLog("notifications configured")
 
       const reused = await reconnectWithToken(base, secureTokenStore)
+      if (reused.revoked) await clearLastAddress()
       if (reused.token) {
         devLog("reconnected", base)
         await fetchAndStream(base, reused.token)
+        await rememberAddress(base)
         setPaired(true)
-        return
+        return "connected"
       }
 
-      const first = await beginPairing(base, deviceNameRef.current)
+      // A new pairing needs the code shown on the Mac.
+      if (!code) return "needs-code"
+
+      const first = await beginPairing(base, deviceNameRef.current, code)
+      if (first.status === "invalid-code") throw new Error("invalid pairing code")
+      if (first.status === "locked-out") throw new Error("too many attempts")
       if (first.status === "denied") throw new Error("pairing denied")
       let token = first.status === "approved" ? first.token : null
       const approvalID = first.status === "pending" ? first.approvalID : null
@@ -268,11 +315,13 @@ export function useBridge() {
 
       await secureTokenStore.set(token)
       await setMacName(base)
+      await rememberAddress(base)
       devLog("paired", base)
       setPaired(true)
       await fetchAndStream(base, token)
+      return "connected"
     },
-    [fetchAndStream],
+    [fetchAndStream, rememberAddress],
   )
 
   const connect = useCallback(async (): Promise<boolean> => {
@@ -284,8 +333,13 @@ export function useBridge() {
       bleRef.current = ble
       ble.onDoorbell = (payload) => void handleDoorbell(payload)
       const { rendezvous } = await ble.findAndConnect()
+      const base = baseUrl(rendezvous.host, rendezvous.port)
       dispatch({ type: "pairingStarted", macName: rendezvous.host })
-      await establish(baseUrl(rendezvous.host, rendezvous.port))
+      const result = await establish(base)
+      if (result === "needs-code") {
+        setPairingCodeRequest(base)
+        return false
+      }
       return true
     } catch (error) {
       dispatch({ type: "failed", message: (error as Error).message })
@@ -300,12 +354,13 @@ export function useBridge() {
       devLog("connectManual", hostPort)
       const base = manualBase(hostPort)
       if (!base) {
-        dispatch({ type: "failed", message: "Enter host:port, for example 127.0.0.1:38963" })
+        dispatch({ type: "failed", message: "Enter a valid address and port" })
         return
       }
       try {
         dispatch({ type: "pairingStarted", macName: hostPort })
-        await establish(base)
+        const result = await establish(base)
+        if (result === "needs-code") setPairingCodeRequest(base)
       } catch (error) {
         devLog("connectManual failed", (error as Error).message)
         dispatch({ type: "failed", message: (error as Error).message })
@@ -313,6 +368,54 @@ export function useBridge() {
     },
     [establish],
   )
+
+  // Try the last bridge this phone reached before falling back to discovery.
+  const connectRemembered = useCallback(async (): Promise<boolean> => {
+    const host = await getLastHost()
+    const port = await getLastPort()
+    if (!host || !port) return false
+    const base = baseUrl(host, port)
+    try {
+      dispatch({ type: "pairingStarted", macName: host })
+      const result = await establish(base)
+      if (result === "needs-code") {
+        setPairingCodeRequest(base)
+        return false
+      }
+      return true
+    } catch {
+      return false
+    }
+  }, [establish])
+
+  const submitPairingCode = useCallback(
+    async (code: string) => {
+      const base = pairingCodeRequest
+      if (!base) return
+      const trimmed = code.trim()
+      if (!trimmed) return
+      try {
+        setPairingCodeError(null)
+        await establish(base, trimmed)
+        setPairingCodeRequest(null)
+      } catch (error) {
+        const message = (error as Error).message
+        setPairingCodeError(
+          message === "invalid pairing code"
+            ? "Incorrect code. Check the code shown on your Mac and try again."
+            : message === "too many attempts"
+              ? "Too many attempts. Wait a few minutes and try again."
+              : message,
+        )
+      }
+    },
+    [establish, pairingCodeRequest],
+  )
+
+  const cancelPairingCode = useCallback(() => {
+    setPairingCodeRequest(null)
+    setPairingCodeError(null)
+  }, [])
 
   const setDeviceName = useCallback(async (name: string) => {
     deviceNameRef.current = name
@@ -440,6 +543,49 @@ export function useBridge() {
     pendingRef.current = appState.pending
   }, [appState])
 
+  // Diagnostics: load the last breadcrumb, flag a run that ended in the
+  // background, and keep recording lifecycle, connection, and errors.
+  useEffect(() => {
+    void (async () => {
+      await diagnosticsRef.current.load()
+      await diagnosticsRef.current.coldStart(Date.now())
+      setDiagnostic(describeDiagnostic(diagnosticsRef.current.snapshot()))
+    })()
+  }, [])
+
+  useEffect(() => {
+    const errorUtils = (globalThis as {
+      ErrorUtils?: {
+        getGlobalHandler?: () => (error: unknown, fatal?: boolean) => void
+        setGlobalHandler: (handler: (error: unknown, fatal?: boolean) => void) => void
+      }
+    }).ErrorUtils
+    if (!errorUtils || typeof errorUtils.setGlobalHandler !== "function") return
+    const previous = errorUtils.getGlobalHandler?.()
+    errorUtils.setGlobalHandler((error, fatal) => {
+      // Persist the breadcrumb; keep the app alive for a fatal error so the write
+      // completes and the user gets a diagnostic instead of a silent abort.
+      void diagnosticsRef.current.error(error, Boolean(fatal))
+      if (!fatal && typeof previous === "function") previous(error, fatal)
+    })
+    return () => {
+      if (typeof previous === "function") errorUtils.setGlobalHandler(previous)
+    }
+  }, [])
+
+  useEffect(() => {
+    const subscription = RNAppState.addEventListener("change", (state) => {
+      void diagnosticsRef.current.transition(state)
+      if (state === "active") void diagnosticsRef.current.foreground(Date.now())
+      else if (state === "background") void diagnosticsRef.current.background(Date.now())
+    })
+    return () => subscription.remove()
+  }, [])
+
+  useEffect(() => {
+    void diagnosticsRef.current.connection(connection.status)
+  }, [connection.status])
+
   // Watchdog: an SSE socket can stay half-open when the Mac sleeps, so probe the
   // bridge on a timer; if it stops answering, show "No connection" and reconnect.
   useEffect(() => {
@@ -475,10 +621,13 @@ export function useBridge() {
       const now = Date.now()
       if (now - lastActiveConnectAt.current < 10000) return
       lastActiveConnectAt.current = now
-      void connect()
+      void (async () => {
+        if (await connectRemembered()) return
+        void connect()
+      })()
     })
     return () => subscription.remove()
-  }, [connect, paired, refresh])
+  }, [connect, connectRemembered, paired, refresh])
 
   useEffect(() => {
     if (startedRef.current) return
@@ -498,8 +647,10 @@ export function useBridge() {
     if (DEV_HOST) {
       void connectManual(DEV_HOST)
     } else {
-      // The first BLE attempt can race the helper's advertising; retry a few times.
+      // Prefer the remembered bridge, then retry BLE discovery a few times (the
+      // first attempt can race the helper's advertising).
       void (async () => {
+        if (await connectRemembered()) return
         for (let attempt = 0; attempt < 5; attempt++) {
           if (await connect()) return
           await sleep(4000)
@@ -511,6 +662,9 @@ export function useBridge() {
       setLiveActivityEnabledState(enabled)
       liveActivity.setEnabled(enabled)
     })
+
+    // Clear a Live Activity left over from a previous run before starting a new one.
+    void endStaleLiveActivity()
 
     void getDeviceName().then((name) => {
       // Prefer the real device name; a stored name only fills in when the system
@@ -532,7 +686,7 @@ export function useBridge() {
       streamRef.current?.stop()
       void bleRef.current?.disconnect()
     }
-  }, [connect, connectManual, resolve, refresh])
+  }, [connect, connectManual, connectRemembered, resolve, refresh])
 
-  return { appState, connection, paired, connect, connectManual, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, themeMode, setThemeMode }
+  return { appState, connection, paired, connect, connectManual, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, themeMode, setThemeMode, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
 }

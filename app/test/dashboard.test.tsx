@@ -1,6 +1,6 @@
 import { fireEvent, render } from "@testing-library/react-native"
 import { Linking } from "react-native"
-import { ConfirmModal, HeroCard, LinkText, MultiQuestionForm, NeedsAttentionCard, SessionCard, SwitcherModal } from "../src/components"
+import { ConfirmModal, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, SessionCard, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
 import { createStyles } from "../src/styles"
 import { darkTheme, lightTheme } from "../src/theme"
@@ -54,13 +54,45 @@ describe("HeroCard", () => {
 
 describe("SessionCard", () => {
   it("shows the phase, tool, counts, and last activity", async () => {
-    const { getByText } = await render(<SessionCard session={session()} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />)
-    expect(getByText("/Users/dev/api")).toBeTruthy()
+    const { getByText, getAllByText } = await render(<SessionCard session={session()} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />)
+    expect(getAllByText("api").length).toBeGreaterThan(0)
     expect(getByText("running")).toBeTruthy()
     expect(getByText("tool · Bash")).toBeTruthy()
     expect(getByText("2 subagents")).toBeTruthy()
     expect(getByText("3 shells")).toBeTruthy()
     expect(getByText("Running the test suite")).toBeTruthy()
+  })
+
+  it("shows the latest message and reveals earlier ones", async () => {
+    const { getByText, queryByText } = await render(
+      <SessionCard
+        session={session({ lastActivity: "Third", activityHistory: ["First", "Second", "Third"] })}
+        requests={[]}
+        resolve={jest.fn()}
+        theme={lightTheme}
+        styles={styles}
+      />,
+    )
+    expect(getByText("Third")).toBeTruthy()
+    expect(queryByText("First")).toBeNull()
+    await fireEvent.press(getByText("show earlier (2)"))
+    expect(getByText("First")).toBeTruthy()
+    expect(getByText("Second")).toBeTruthy()
+  })
+
+  it("shows the recent messages before a pending question", async () => {
+    const { getByText } = await render(
+      <SessionCard
+        session={session({ phase: "waiting-answer", currentTool: null, lastActivity: "Third", activityHistory: ["First", "Second", "Third"] })}
+        requests={[{ requestID: "q1", sessionID: "s1", kind: "question", title: "Pick", options: [{ label: "A" }] }]}
+        resolve={jest.fn()}
+        theme={lightTheme}
+        styles={styles}
+      />,
+    )
+    expect(getByText("First")).toBeTruthy()
+    expect(getByText("Second")).toBeTruthy()
+    expect(getByText("Pick")).toBeTruthy()
   })
 
   it("shows a permission inline and resolves allow/deny", async () => {
@@ -88,15 +120,23 @@ describe("SessionCard", () => {
     const { getByText } = await render(
       <SessionCard
         session={session({ phase: "waiting-answer", currentTool: null })}
-        requests={[{ requestID: "q1", sessionID: "s1", kind: "question", title: "Which database?", options: ["PostgreSQL", "SQLite"] }]}
+        requests={[{ requestID: "q1", sessionID: "s1", kind: "question", title: "Which database?", options: [{ label: "PostgreSQL", description: "Managed relational database" }, { label: "SQLite" }] }]}
         resolve={resolve}
         theme={lightTheme}
         styles={styles}
       />,
     )
     expect(getByText("Which database?")).toBeTruthy()
+    expect(getByText("Managed relational database")).toBeTruthy()
     await fireEvent.press(getByText("SQLite"))
     expect(resolve).toHaveBeenCalledWith("q1", "SQLite")
+  })
+
+  it("shows the session cost when reported", async () => {
+    const { getByText } = await render(
+      <SessionCard session={session({ cost: 0.0432 })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />,
+    )
+    expect(getByText("$0.0432")).toBeTruthy()
   })
 
   it("shows only the first pending request for a session", async () => {
@@ -122,7 +162,7 @@ describe("NeedsAttentionCard", () => {
     const resolve = jest.fn()
     const { getByText } = await render(
       <NeedsAttentionCard
-        request={{ requestID: "o1", sessionID: "orphan", kind: "question", title: "A session asked something", options: ["Yes", "No"] }}
+        request={{ requestID: "o1", sessionID: "orphan", kind: "question", title: "A session asked something", options: [{ label: "Yes" }, { label: "No" }] }}
         resolve={resolve}
         theme={lightTheme}
         styles={styles}
@@ -170,13 +210,14 @@ describe("inactive session", () => {
     expect(onSendPrompt).toHaveBeenCalledWith("s1", "continue please")
   })
 
-  it("expands a long activity message", async () => {
+  it("opens the full message in a modal", async () => {
     const long = "A".repeat(200)
-    const { getByText } = await render(
+    const { getByText, getByLabelText } = await render(
       <SessionCard session={session({ lastActivity: long })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />,
     )
-    await fireEvent.press(getByText("more"))
-    expect(getByText("less")).toBeTruthy()
+    await fireEvent.press(getByLabelText("Read full message"))
+    expect(getByText("Message")).toBeTruthy()
+    expect(getByText("Close")).toBeTruthy()
   })
 })
 
@@ -186,11 +227,11 @@ describe("MultiQuestionForm", () => {
     sessionID: "s1",
     kind: "question",
     title: "Deploy target?",
-    options: ["Staging", "Production"],
+    options: [{ label: "Staging", value: "staging" }, { label: "Production", value: "prod" }],
     allowFreeform: false,
     questions: [
-      { key: "q0", title: "Deploy target?", options: ["Staging", "Production"], allowFreeform: false },
-      { key: "q1", title: "Run migrations?", options: ["Yes", "No"], allowFreeform: false },
+      { key: "q0", title: "Deploy target?", options: [{ label: "Staging", value: "staging" }, { label: "Production", value: "prod" }], allowFreeform: false },
+      { key: "q1", title: "Run migrations?", options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }], allowFreeform: false },
     ],
   }
 
@@ -209,7 +250,7 @@ describe("MultiQuestionForm", () => {
     await fireEvent.press(getByLabelText("Deploy target?: Staging"))
     await fireEvent.press(getByLabelText("Run migrations?: Yes"))
     await fireEvent.press(getByLabelText("Submit answers"))
-    expect(resolve).toHaveBeenCalledWith("r2", "Staging", { q0: "Staging", q1: "Yes" })
+    expect(resolve).toHaveBeenCalledWith("r2", "staging", { q0: "staging", q1: "yes" })
   })
 })
 
@@ -246,11 +287,23 @@ describe("session controls", () => {
     expect(getByText("build · deepseek/deepseek-flash")).toBeTruthy()
   })
 
-  it("shows Stop only while running and calls onStop", async () => {
+  it("shows Stop while running or waiting and calls onStop", async () => {
     const onStop = jest.fn()
     const running = await render(<SessionCard session={session({ phase: "running" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} onStop={onStop} />)
     await fireEvent.press(running.getByText("Stop"))
     expect(onStop).toHaveBeenCalledWith("s1")
+
+    const waiting = await render(
+      <SessionCard
+        session={session({ phase: "waiting-answer", currentTool: null })}
+        requests={[{ requestID: "q1", sessionID: "s1", kind: "question", title: "Pick", options: [{ label: "A" }] }]}
+        resolve={jest.fn()}
+        theme={lightTheme}
+        styles={styles}
+        onStop={onStop}
+      />,
+    )
+    expect(waiting.getByText("Stop")).toBeTruthy()
 
     const done = await render(<SessionCard session={session({ phase: "completed" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} onStop={onStop} />)
     expect(done.queryByText("Stop")).toBeNull()
@@ -318,12 +371,13 @@ describe("SwitcherModal", () => {
 })
 
 describe("DemoScreen controls", () => {
-  it("stops a running session and closes a card", async () => {
+  it("stops an active session and closes a card", async () => {
     const { getAllByText, getAllByLabelText, queryByText } = await render(
       <DemoScreen onClose={() => {}} onOpenGallery={() => {}} theme={lightTheme} styles={styles} />,
     )
+    const before = getAllByText("Stop").length
     await fireEvent.press(getAllByText("Stop")[0])
-    expect(queryByText("Stop")).toBeNull()
+    expect(getAllByText("Stop").length).toBe(before - 1)
 
     const closes = getAllByLabelText("Close session")
     await fireEvent.press(closes[closes.length - 1])
@@ -331,15 +385,43 @@ describe("DemoScreen controls", () => {
   })
 })
 
+describe("ManualConnectModal", () => {
+  it("passes the address and port to onConnect", async () => {
+    const onConnect = jest.fn()
+    const { getByLabelText, getByText } = await render(
+      <ManualConnectModal visible onConnect={onConnect} onClose={() => {}} theme={lightTheme} styles={styles} />,
+    )
+    await fireEvent.changeText(getByLabelText("Address"), "192.168.1.10")
+    await fireEvent.changeText(getByLabelText("Port"), "4000")
+    await fireEvent.press(getByText("Connect"))
+    expect(onConnect).toHaveBeenCalledWith("192.168.1.10", "4000")
+  })
+})
+
+describe("PairingCodeModal", () => {
+  it("submits the entered code and shows an error", async () => {
+    const onSubmit = jest.fn()
+    const { getByLabelText, getByText } = await render(
+      <PairingCodeModal visible error="Incorrect code" onSubmit={onSubmit} onCancel={() => {}} theme={lightTheme} styles={styles} />,
+    )
+    expect(getByText("Incorrect code")).toBeTruthy()
+    await fireEvent.changeText(getByLabelText("Pairing code"), "123456")
+    await fireEvent.press(getByText("Pair"))
+    expect(onSubmit).toHaveBeenCalledWith("123456")
+  })
+})
+
 describe("session title", () => {
-  it("names the card with the session title and falls back to the cwd", async () => {
+  it("names the card with the session title and falls back to the directory name", async () => {
     const titled = await render(
       <SessionCard session={session({ title: "Add a health endpoint", cwd: "/Users/dev/api" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />,
     )
     expect(titled.getByText("Add a health endpoint")).toBeTruthy()
+    expect(titled.getByText("api")).toBeTruthy()
 
     const fallback = await render(<SessionCard session={session({ cwd: "/Users/dev/api" })} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />)
-    expect(fallback.getByText("/Users/dev/api")).toBeTruthy()
+    expect(fallback.getAllByText("api").length).toBeGreaterThan(0)
+    expect(fallback.queryByText("/Users/dev/api")).toBeNull()
   })
 })
 

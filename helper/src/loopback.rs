@@ -33,6 +33,7 @@ struct State {
     pending: Option<PendingPairing>,
     last_decision: Option<Decision>,
     browser_opened: bool,
+    pairing_code: Option<String>,
 }
 
 impl State {
@@ -42,6 +43,7 @@ impl State {
             "rendezvous": self.rendezvous,
             "pending": self.pending,
             "lastDecision": self.last_decision,
+            "pairingCode": self.pairing_code,
         })
     }
 }
@@ -70,6 +72,7 @@ impl Loopback {
                 pending: None,
                 last_decision: None,
                 browser_opened: !open_browser,
+                pairing_code: None,
             })),
         })
     }
@@ -88,6 +91,12 @@ impl Loopback {
     pub fn run(self, doorbells: Sender<Value>, bridge: BridgeClient) -> anyhow::Result<()> {
         if std::io::stdin().is_terminal() {
             spawn_terminal_prompt(self.state.clone(), bridge.clone());
+        }
+        if let Ok(code) = bridge.pairing_code() {
+            if !code.is_empty() {
+                println!("[pairing] current pairing code: {code}");
+                self.state.lock().unwrap().pairing_code = Some(code);
+            }
         }
         for request in self.server.incoming_requests() {
             if let Err(err) = self.handle(request, &doorbells, &bridge) {
@@ -157,6 +166,11 @@ impl Loopback {
             if !approval_id.is_empty() {
                 let page = format!("http://127.0.0.1:{}/", self.port());
                 println!("[pairing] {device_name} wants to pair — approve at {page}");
+                if let Some(code) = payload.get("code").and_then(Value::as_str) {
+                    if !code.is_empty() {
+                        state.pairing_code = Some(code.to_string());
+                    }
+                }
                 state.pending = Some(PendingPairing {
                     approval_id,
                     device_name,
@@ -168,7 +182,7 @@ impl Loopback {
             }
         }
 
-        let _ = doorbells.send(payload);
+        let _ = doorbells.send(relay_payload(&payload));
     }
 
     fn decide(&self, body: Value, bridge: &BridgeClient) -> Decision {
@@ -248,6 +262,15 @@ fn spawn_terminal_prompt(state: Arc<Mutex<State>>, bridge: BridgeClient) {
     });
 }
 
+/// The payload sent to the BLE peripheral must never carry the pairing code.
+pub fn relay_payload(payload: &Value) -> Value {
+    let mut relay = payload.clone();
+    if let Some(object) = relay.as_object_mut() {
+        object.remove("code");
+    }
+    relay
+}
+
 fn read_json(request: &mut Request) -> Value {
     let mut body = String::new();
     if request.as_reader().read_to_string(&mut body).is_err() {
@@ -280,6 +303,13 @@ fn respond_json(request: Request, code: u16, value: Value) {
 }
 
 fn approval_html(state: &State) -> String {
+    let code_line = match &state.pairing_code {
+        Some(code) => format!(
+            "<p>Pairing code: <code>{}</code> — enter it on your phone.</p>",
+            escape_html(code)
+        ),
+        None => String::new(),
+    };
     let body = match &state.pending {
         Some(pending) => {
             let name = escape_html(&pending.device_name);
@@ -287,6 +317,7 @@ fn approval_html(state: &State) -> String {
             format!(
                 r#"<h1>Pair <code>{name}</code>?</h1>
 <p>This phone wants to control your OpenCode agents over the local network.</p>
+{code_line}
 <div class="buttons">
   <button class="approve" onclick="decide('approve')">Allow</button>
   <button class="deny" onclick="decide('deny')">Deny</button>
@@ -303,9 +334,11 @@ async function decide(decision) {{
 </script>"#
             )
         }
-        None => r#"<h1>No pending pairing requests</h1>
-<p>The helper is running. Open the app on your phone to request pairing.</p>"#
-            .to_string(),
+        None => format!(
+            r#"<h1>No pending pairing requests</h1>
+<p>The helper is running. Open the app on your phone to request pairing.</p>
+{code_line}"#
+        ),
     };
 
     format!(
@@ -411,6 +444,35 @@ pub fn approval_page_for_test(device_name: &str, approval_id: &str) -> String {
         }),
         last_decision: None,
         browser_opened: true,
+        pairing_code: None,
     };
     approval_html(&state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relay_payload_strips_the_pairing_code() {
+        let payload = json!({ "kind": "pairing", "approvalID": "a", "code": "123456" });
+        let relay = relay_payload(&payload);
+        assert!(relay.get("code").is_none());
+        assert_eq!(relay.get("approvalID").and_then(Value::as_str), Some("a"));
+    }
+
+    #[test]
+    fn approval_page_shows_the_pairing_code() {
+        let mut state = State {
+            backend: "test".into(),
+            rendezvous: "127.0.0.1:38963".into(),
+            pending: None,
+            last_decision: None,
+            browser_opened: true,
+            pairing_code: Some("246810".into()),
+        };
+        assert!(approval_html(&state).contains("246810"));
+        state.pairing_code = None;
+        assert!(!approval_html(&state).contains("Pairing code"));
+    }
 }

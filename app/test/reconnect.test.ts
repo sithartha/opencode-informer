@@ -15,7 +15,7 @@ test("reconnect succeeds with a valid stored token", async () => {
 test("no stored token means pairing is required", async () => {
   const store = memoryTokenStore(null)
   const result = await reconnectWithToken("http://h:1", store, async () => snapshot)
-  assert.deepEqual(result, { token: null, snapshot: null })
+  assert.deepEqual(result, { token: null, snapshot: null, revoked: false })
 })
 
 test("a 401 clears the token so the app re-pairs", async () => {
@@ -23,7 +23,7 @@ test("a 401 clears the token so the app re-pairs", async () => {
   const result = await reconnectWithToken("http://h:1", store, async () => {
     throw new Error("unauthorized")
   })
-  assert.deepEqual(result, { token: null, snapshot: null })
+  assert.deepEqual(result, { token: null, snapshot: null, revoked: true })
   assert.equal(await store.get(), null)
 })
 

@@ -1,4 +1,5 @@
 import type { ActivityEvent } from "./events"
+import { parseOptions } from "./events"
 
 export type NotificationCategory = "PERMISSION_REQUEST" | "QUESTION" | "SESSION_COMPLETED"
 
@@ -47,7 +48,7 @@ export function notificationFor(event: ActivityEvent): NotificationPlan | null {
           requestID: String(data.requestID),
         }
       }
-      const options = Array.isArray(data.options) ? data.options.slice(0, MAX_OPTION_ACTIONS).map(String) : []
+      const options = parseOptions(data.options).slice(0, MAX_OPTION_ACTIONS).map((option) => option.label)
       return {
         category: "QUESTION",
         title: String(data.title ?? "Question"),

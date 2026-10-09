@@ -35,13 +35,16 @@ function authHeader(service) {
  */
 export function buildFormAnswer(field, text) {
   const options = Array.isArray(field && field.options) ? field.options : []
+  const labelOf = (o) => (o && typeof o === "object" ? (o.label != null ? o.label : o.value) : o)
+  const valueOf = (o) => (o && typeof o === "object" ? (o.value != null ? o.value : o.label) : o)
   const valueFor = (token) => {
     const t = String(token).trim()
     const match = options.find(
-      (o) => String(o.label).toLowerCase() === t.toLowerCase() || String(o.value).toLowerCase() === t.toLowerCase(),
+      (o) => String(labelOf(o)).toLowerCase() === t.toLowerCase() || String(valueOf(o)).toLowerCase() === t.toLowerCase(),
     )
     if (!match) return t
-    return match.value != null ? match.value : match.label != null ? match.label : t
+    const value = valueOf(match)
+    return value != null ? value : t
   }
   if (field && field.type === "multiselect") {
     return String(text)

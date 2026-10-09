@@ -5,6 +5,12 @@ import { appendFileSync } from "node:fs"
 const MAX_BODY = 64 * 1024
 const DEBUG_FILE = "/tmp/open-island-mobile-debug.log"
 
+// Pairing brute-force protection: per-source failed-code attempts in a rolling
+// window, then a temporary lockout.
+const PAIR_WINDOW_MS = 5 * 60 * 1000
+const PAIR_MAX_FAILURES = 5
+const PAIR_LOCKOUT_MS = 15 * 60 * 1000
+
 function logHttp(method, path) {
   try {
     appendFileSync(DEBUG_FILE, `[${new Date().toISOString()}] http ${method} ${path}\n`)
@@ -47,6 +53,29 @@ function parseJSON(text) {
 export function createBridgeServer({ port, host, pairing, model, resolution, keepaliveMs = 15000, sendPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession }) {
   const sseClients = new Set()
   let keepaliveTimer = null
+  const pairFailures = new Map()
+
+  function remoteKey(req) {
+    return (req.socket && req.socket.remoteAddress) || "unknown"
+  }
+
+  function pairLockedOut(key) {
+    const entry = pairFailures.get(key)
+    return Boolean(entry && entry.blockedUntil && Date.now() < entry.blockedUntil)
+  }
+
+  function recordPairFailure(key) {
+    // Bound the map so a flood of source addresses cannot grow it forever.
+    if (pairFailures.size > 1000) pairFailures.clear()
+    const now = Date.now()
+    let entry = pairFailures.get(key)
+    if (!entry || now - entry.windowStart > PAIR_WINDOW_MS) {
+      entry = { count: 0, windowStart: now, blockedUntil: 0 }
+    }
+    entry.count += 1
+    if (entry.count >= PAIR_MAX_FAILURES) entry.blockedUntil = now + PAIR_LOCKOUT_MS
+    pairFailures.set(key, entry)
+  }
 
   const server = http.createServer((req, res) => {
     route(req, res).catch(() => {
@@ -107,6 +136,12 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
       return sendJSON(res, 200, { status: "approved", token: status.token })
     }
     if (!body.deviceName) return sendJSON(res, 400, { error: "deviceName required" })
+    const key = remoteKey(req)
+    if (pairLockedOut(key)) return sendJSON(res, 429, { error: "too many attempts" })
+    if (!pairing.validateCode(body.code)) {
+      recordPairFailure(key)
+      return sendJSON(res, 403, { error: "invalid pairing code" })
+    }
     const approval = pairing.begin(body.deviceName)
     return sendJSON(res, 202, { status: "pending", approvalID: approval.id })
   }
@@ -118,6 +153,15 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
     if (status.status === "denied") return sendJSON(res, 403, { status: "denied" })
     if (status.status === "pending") return sendJSON(res, 200, { status: "pending" })
     return sendJSON(res, 200, { status: "approved", token: status.token })
+  }
+
+  // The local helper reads the current pairing code (loopback only) to show the
+  // user; it is never exposed on the LAN.
+  function handlePairCode(req, res) {
+    const remote = req.socket && req.socket.remoteAddress
+    const loopback = !remote || remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1"
+    if (!loopback) return sendJSON(res, 403, { error: "localhost only" })
+    return sendJSON(res, 200, { code: pairing.currentCode() })
   }
 
   // Called by the local helper after the Mac user approves or denies a pairing
@@ -229,6 +273,7 @@ export function createBridgeServer({ port, host, pairing, model, resolution, kee
 
     if (req.method === "POST" && path === "/pair") return handlePair(req, res)
     if (req.method === "GET" && path === "/pair") return handlePairStatus(url, res)
+    if (req.method === "GET" && path === "/pair/code") return handlePairCode(req, res)
     if (req.method === "POST" && path === "/pair/decision") return handlePairDecision(req, res)
 
     if (!authorized(req)) return sendJSON(res, 401, { error: "unauthorized" })

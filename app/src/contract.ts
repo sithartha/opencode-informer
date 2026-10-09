@@ -2,11 +2,12 @@
 // stay identical (test/contract-parity.test.ts).
 
 export const CONTRACT = {
-  version: 1,
+  version: 3,
   bridge: { host: "0.0.0.0", defaultPort: 38963 },
   helper: { host: "127.0.0.1", defaultPort: 38964, ringPath: "/ring" },
   endpoints: {
     pair: "/pair",
+    pairCode: "/pair/code",
     state: "/state",
     status: "/status",
     events: "/events",
@@ -30,6 +31,7 @@ export const CONTRACT = {
     "turn.completed",
     "session.activity",
     "session.updated",
+    "session.cost",
     "actionable.resolved",
   ],
   doorbellKinds: ["permission", "question", "completion", "pairing", "refresh"],

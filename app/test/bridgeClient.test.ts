@@ -39,12 +39,27 @@ test("URL helpers follow the contract endpoints", () => {
   assert.equal(resolutionUrl(base), `${base}/resolution`)
 })
 
-test("beginPairing reports pending then approved", async () => {
-  const pending = await beginPairing("http://h:1", "iPhone", fakeFetch(202, { status: "pending", approvalID: "a1" }))
+test("beginPairing sends the device name and code and reports the result", async () => {
+  let sent: unknown
+  const capture = (async (_url: string, init?: { body?: string }) => {
+    sent = JSON.parse(String(init?.body))
+    return { status: 202, ok: true, json: async () => ({ status: "pending", approvalID: "a1" }) } as Response
+  }) as unknown as FetchLike
+  const pending = await beginPairing("http://h:1", "iPhone", "123456", capture)
+  assert.deepEqual(sent, { deviceName: "iPhone", code: "123456" })
   assert.deepEqual(pending, { status: "pending", approvalID: "a1" })
 
-  const approved = await beginPairing("http://h:1", "iPhone", fakeFetch(200, { status: "approved", token: "t1" }))
+  const approved = await beginPairing("http://h:1", "iPhone", "123456", fakeFetch(200, { status: "approved", token: "t1" }))
   assert.deepEqual(approved, { status: "approved", token: "t1" })
+
+  const invalid = await beginPairing("http://h:1", "iPhone", "000000", fakeFetch(403, { error: "invalid pairing code" }))
+  assert.deepEqual(invalid, { status: "invalid-code" })
+
+  const denied = await beginPairing("http://h:1", "iPhone", "123456", fakeFetch(403, { status: "denied" }))
+  assert.deepEqual(denied, { status: "denied" })
+
+  const locked = await beginPairing("http://h:1", "iPhone", "000000", fakeFetch(429, { error: "too many attempts" }))
+  assert.deepEqual(locked, { status: "locked-out" })
 })
 
 test("pollPairing surfaces approval and denial", async () => {

@@ -5,6 +5,8 @@ import type { TokenStore } from "./tokenStore"
 export interface ReconnectResult {
   token: string | null
   snapshot: Snapshot | null
+  /** True when a stored token was rejected (revoked) and cleared. */
+  revoked?: boolean
 }
 
 /**
@@ -17,14 +19,14 @@ export async function reconnectWithToken(
   loadState: (base: string, token: string) => Promise<Snapshot> = fetchState,
 ): Promise<ReconnectResult> {
   const token = await store.get()
-  if (!token) return { token: null, snapshot: null }
+  if (!token) return { token: null, snapshot: null, revoked: false }
   try {
     const snapshot = await loadState(base, token)
     return { token, snapshot }
   } catch (error) {
     if ((error as Error).message === "unauthorized") {
       await store.clear()
-      return { token: null, snapshot: null }
+      return { token: null, snapshot: null, revoked: true }
     }
     throw error
   }

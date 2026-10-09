@@ -23,6 +23,7 @@ function seed(): AppState {
   at("session.updated", { sessionID: "demo_api", title: "Add a health endpoint", agent: "build", model: "deepseek/deepseek-flash" })
   at("tool.started", { sessionID: "demo_api", tool: "Bash" })
   at("session.activity", { sessionID: "demo_api", text: "Running the test suite for the API module" })
+  at("session.cost", { sessionID: "demo_api", cost: 0.0432 })
   at("session.started", { sessionID: "demo_web", cwd: "/Users/dev/web", agent: "opencode" })
   at("session.updated", { sessionID: "demo_web", title: "Rework the checkout form", agent: "build", model: "deepseek/deepseek-flash" })
   at("tool.started", { sessionID: "demo_web", tool: "Edit" })
@@ -38,7 +39,11 @@ function seed(): AppState {
     sessionID: "demo_docs",
     requestID: "demo_q",
     title: "Which database should I use?",
-    options: ["PostgreSQL", "SQLite", "MySQL"],
+    options: [
+      { label: "PostgreSQL", description: "Managed relational database" },
+      { label: "SQLite", description: "Embedded file database" },
+      { label: "MySQL" },
+    ],
     allowFreeform: true,
   })
   return state
@@ -94,7 +99,7 @@ export function DemoScreen({
       let next = applyEvent(prev, { type: "session.started", data: { sessionID: id, cwd: `/Users/dev/new-${demoCounter}`, agent: "opencode" } })
       next = applyEvent(next, {
         type: "question.asked",
-        data: { sessionID: id, requestID: `${id}_q`, title: "Ship this change?", options: ["Yes", "No"] },
+        data: { sessionID: id, requestID: `${id}_q`, title: "Ship this change?", options: [{ label: "Yes" }, { label: "No" }] },
       })
       return next
     })

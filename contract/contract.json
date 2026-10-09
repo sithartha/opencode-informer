@@ -1,9 +1,10 @@
 {
-  "version": 1,
+  "version": 3,
   "bridge": { "host": "0.0.0.0", "defaultPort": 38963 },
   "helper": { "host": "127.0.0.1", "defaultPort": 38964, "ringPath": "/ring" },
   "endpoints": {
     "pair": "/pair",
+    "pairCode": "/pair/code",
     "state": "/state",
     "status": "/status",
     "events": "/events",
@@ -27,6 +28,7 @@
     "turn.completed",
     "session.activity",
     "session.updated",
+    "session.cost",
     "actionable.resolved"
   ],
   "doorbellKinds": ["permission", "question", "completion", "pairing", "refresh"],
@@ -47,15 +49,17 @@
     "tool.ended": { "required": ["sessionID", "tool"] },
     "permission.requested": { "required": ["sessionID", "requestID", "title", "summary", "agent"] },
     "question.asked": { "required": ["sessionID", "requestID", "title", "options", "questions"] },
+    "option": { "required": ["label"] },
     "question": { "required": ["key", "title", "options", "allowFreeform"] },
     "turn.completed": { "required": ["sessionID", "summary"] },
     "session.activity": { "required": ["sessionID", "text"] },
     "session.updated": { "required": ["sessionID"] },
+    "session.cost": { "required": ["sessionID", "cost"] },
     "actionable.resolved": { "required": ["sessionID", "requestID"] },
     "resolution.request": { "required": ["requestID", "action"] },
     "resolution.answers": { "required": ["requestID", "answers"] },
     "doorbell": { "required": ["kind"] },
-    "pair.request": { "required": ["deviceName"] },
+    "pair.request": { "required": ["deviceName", "code"] },
     "pair.status": { "required": ["status"] }
   },
   "fixtures": {
@@ -73,6 +77,7 @@
             "phase": "running",
             "currentTool": "Bash",
             "lastActivity": "Running tests",
+            "cost": 0.0123,
             "subagents": 0,
             "shells": 0,
             "updatedAt": 1759600000000
@@ -137,10 +142,21 @@
         "sessionID": "ses_1",
         "requestID": "req_2",
         "title": "Which database should I use?",
-        "options": ["PostgreSQL", "SQLite"],
+        "options": [
+          { "label": "PostgreSQL", "value": "postgres", "description": "Managed relational database" },
+          { "label": "SQLite", "value": "sqlite", "description": "Embedded file database" }
+        ],
         "allowFreeform": false,
         "questions": [
-          { "key": "q0", "title": "Which database should I use?", "options": ["PostgreSQL", "SQLite"], "allowFreeform": false }
+          {
+            "key": "q0",
+            "title": "Which database should I use?",
+            "options": [
+              { "label": "PostgreSQL", "value": "postgres", "description": "Managed relational database" },
+              { "label": "SQLite", "value": "sqlite", "description": "Embedded file database" }
+            ],
+            "allowFreeform": false
+          }
         ]
       }
     },
@@ -150,11 +166,30 @@
         "sessionID": "ses_1",
         "requestID": "req_3",
         "title": "Deploy target?",
-        "options": ["Staging", "Production"],
+        "options": [
+          { "label": "Staging", "value": "staging" },
+          { "label": "Production", "value": "prod" }
+        ],
         "allowFreeform": false,
         "questions": [
-          { "key": "q0", "title": "Deploy target?", "options": ["Staging", "Production"], "allowFreeform": false },
-          { "key": "q1", "title": "Run migrations?", "options": ["Yes", "No"], "allowFreeform": false }
+          {
+            "key": "q0",
+            "title": "Deploy target?",
+            "options": [
+              { "label": "Staging", "value": "staging" },
+              { "label": "Production", "value": "prod" }
+            ],
+            "allowFreeform": false
+          },
+          {
+            "key": "q1",
+            "title": "Run migrations?",
+            "options": [
+              { "label": "Yes", "value": "yes" },
+              { "label": "No", "value": "no" }
+            ],
+            "allowFreeform": false
+          }
         ]
       }
     },
@@ -169,6 +204,10 @@
     "session.updated": {
       "schema": "session.updated",
       "value": { "sessionID": "ses_1", "title": "Add a health endpoint", "agent": "build", "model": "deepseek/deepseek-flash" }
+    },
+    "session.cost": {
+      "schema": "session.cost",
+      "value": { "sessionID": "ses_1", "cost": 0.0123 }
     },
     "actionable.resolved": {
       "schema": "actionable.resolved",
@@ -186,7 +225,7 @@
       "schema": "doorbell",
       "value": { "kind": "permission", "requestID": "req_1", "sessionID": "ses_1", "title": "Allow Bash" }
     },
-    "pair.request": { "schema": "pair.request", "value": { "deviceName": "Anton's iPhone" } },
+    "pair.request": { "schema": "pair.request", "value": { "deviceName": "Anton's iPhone", "code": "123456" } },
     "pair.status": { "schema": "pair.status", "value": { "status": "pending" } }
   }
 }

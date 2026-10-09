@@ -9,6 +9,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let bridge = BridgeClient()
     private var bleStatus = "starting"
     private var pairingPromptOpen = false
+    private var pairingCode: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -32,6 +33,20 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
 
         ble.start()
+        refreshPairingCode()
+        Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.refreshPairingCode()
+        }
+    }
+
+    private func refreshPairingCode() {
+        bridge.fetchPairingCode { [weak self] code in
+            DispatchQueue.main.async {
+                guard let self, let code else { return }
+                self.pairingCode = code
+                self.rebuildMenu()
+            }
+        }
     }
 
     private func handleRing(_ payload: [String: Any]) {
@@ -44,23 +59,31 @@ final class AppController: NSObject, NSApplicationDelegate {
             pairingPromptOpen = true
             let approvalID = payload["approvalID"] as? String ?? ""
             let deviceName = payload["deviceName"] as? String ?? "Unknown device"
+            let code = payload["code"] as? String
             DispatchQueue.main.async { [weak self] in
-                self?.promptPairing(approvalID: approvalID, deviceName: deviceName)
+                self?.promptPairing(approvalID: approvalID, deviceName: deviceName, code: code)
             }
         }
-        ble.deliverDoorbell(payload)
+        // The pairing code is for the local user only; never hand it to the phone.
+        var relay = payload
+        relay.removeValue(forKey: "code")
+        ble.deliverDoorbell(relay)
     }
 
-    private func promptPairing(approvalID: String, deviceName: String) {
+    private func promptPairing(approvalID: String, deviceName: String, code: String?) {
         guard !approvalID.isEmpty else { return }
         let alert = NSAlert()
         alert.messageText = "Pair \(deviceName)?"
-        alert.informativeText = "This phone wants to control your OpenCode agents over the local network."
+        let shownCode = code ?? pairingCode
+        alert.informativeText =
+            "This phone wants to control your OpenCode agents over the local network."
+            + (shownCode.map { "\n\nPairing code: \($0)" } ?? "")
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Deny")
         let approved = alert.runModal() == .alertFirstButtonReturn
         pairingPromptOpen = false
         bridge.decidePairing(approvalID: approvalID, approve: approved)
+        refreshPairingCode()
     }
 
     private func rebuildMenu() {
@@ -73,6 +96,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         let address = NSMenuItem(title: "Rendezvous: \(Contract.rendezvousValue())", action: nil, keyEquivalent: "")
         address.isEnabled = false
         menu.addItem(address)
+
+        let code = NSMenuItem(title: "Pairing code: \(pairingCode ?? "…")", action: nil, keyEquivalent: "")
+        code.isEnabled = false
+        menu.addItem(code)
 
         menu.addItem(.separator())
 

@@ -14,9 +14,12 @@ app. Machine-readable form: `contract.json`; validator: `validate.mjs`.
 
 All endpoints except `/pair` require `Authorization: Bearer <token>`.
 
+`POST /pair` also requires the current pairing `code` (shown on the Mac by the helper); a
+missing or wrong code is rejected, and repeated failures from one source are locked out.
+
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/pair` | begin pairing (`{deviceName}`) or complete it (`{approvalID}`) |
+| `POST` | `/pair` | begin pairing (`{deviceName, code}`) or complete it (`{approvalID}`) |
 | `GET` | `/pair?approvalID=…` | pairing status |
 | `GET` | `/state` | session snapshot + active count |
 | `GET` | `/status` | connection + active count |
@@ -42,6 +45,17 @@ Required payload fields for each are declared under `schemas` in `contract.json`
 `POST /resolution` body is `{requestID, action}`. For a permission, `action` is
 `allow` or `deny`. For a question, `action` is the chosen option text.
 
+## Question options
+
+A question option is an object:
+
+```
+{ "label": "<shown to the user>", "value": "<sent when answering>", "description": "<optional helper text>" }
+```
+
+`label` is required; `value` defaults to `label` when absent; `description` is optional.
+`options` on a question (and on `question.asked`) is an array of these objects.
+
 ## BLE layout (Mac = peripheral, phone = central)
 
 | Role | UUID |
@@ -53,7 +67,10 @@ Required payload fields for each are declared under `schemas` in `contract.json`
 
 ## Doorbell payload (plugin → helper → phone)
 
-`{ "kind": "permission"|"question"|"completion"|"pairing", "requestID"?, "sessionID"?, "title"?, "approvalID"?, "deviceName"? }`
+`{ "kind": "permission"|"question"|"completion"|"pairing", "requestID"?, "sessionID"?, "title"?, "approvalID"?, "deviceName"?, "code"? }`
+
+`code` is present only for `kind: "pairing"`, is shown to the local user by the helper, and
+is never forwarded to the phone.
 
 ## Tests
 

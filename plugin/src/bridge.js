@@ -42,7 +42,9 @@ export function buildBridge(options = {}) {
   const doorbell = options.doorbell || createDoorbell(config.helperUrl)
   const pairing = new PairingManager({
     onApprovalRequested: (approval) => {
-      void doorbell({ kind: "pairing", approvalID: approval.id, deviceName: approval.deviceName })
+      // Include the code so the helper can show it to the Mac user. The helper must
+      // strip it before relaying to a phone.
+      void doorbell({ kind: "pairing", approvalID: approval.id, deviceName: approval.deviceName, code: approval.code })
     },
   })
   const applyPermission = options.applyPermission || (async () => {})
@@ -79,7 +81,7 @@ export function buildBridge(options = {}) {
       const timer = setTimeout(() => {
         pendingIdle.delete(id)
         markIdle(id)
-      }, 900)
+      }, 300)
       pendingIdle.set(id, timer)
     }
     return session
@@ -116,25 +118,37 @@ export function buildBridge(options = {}) {
     switchSession,
   })
 
-  const getSessionTitle = options.getSessionTitle
-  const TITLE_TRIGGERS = new Set(["session.created", "session.inbox.enqueued", "session.execution.started"])
-  const titleTimers = new Map()
-  // OpenCode does not put the session title in the event stream, so resolve it
-  // out of band (debounced) and feed it back through the model as session.title.
-  function refreshTitle(sessionID) {
-    if (!getSessionTitle || !sessionID) return
-    const existing = titleTimers.get(sessionID)
+  const getSessionInfo = options.getSessionInfo
+  const INFO_TRIGGERS = new Set([
+    "session.created",
+    "session.inbox.enqueued",
+    "session.execution.started",
+    "session.idle",
+    "session.status",
+    "session.execution.succeeded",
+    "session.execution.failed",
+    "session.execution.interrupted",
+  ])
+  const infoTimers = new Map()
+  const seenSessions = new Set()
+  // OpenCode does not put the session title or cost in the event stream, so
+  // resolve them out of band (debounced) and feed them back through the model.
+  function refreshInfo(sessionID) {
+    if (!getSessionInfo || !sessionID) return
+    const existing = infoTimers.get(sessionID)
     if (existing) clearTimeout(existing)
-    titleTimers.set(
+    infoTimers.set(
       sessionID,
       setTimeout(() => {
-        titleTimers.delete(sessionID)
-        Promise.resolve(getSessionTitle({ sessionID }))
-          .then((title) => {
-            if (title) handleEvent({ type: "session.title", data: { sessionID, title } })
+        infoTimers.delete(sessionID)
+        Promise.resolve(getSessionInfo({ sessionID }))
+          .then((info) => {
+            if (!info) return
+            if (info.title) handleEvent({ type: "session.title", data: { sessionID, title: info.title } })
+            if (typeof info.cost === "number") handleEvent({ type: "session.cost", data: { sessionID, cost: info.cost } })
           })
           .catch(() => {})
-      }, 1200),
+      }, 250),
     )
   }
 
@@ -162,7 +176,13 @@ export function buildBridge(options = {}) {
     }
     const type = event && event.type
     const sessionID = event && event.data && event.data.sessionID
-    if (TITLE_TRIGGERS.has(type)) refreshTitle(sessionID)
+    // Fetch a session's title/cost the first time we see it, so sessions we only
+    // learn about lazily (after a restart) still get their cost.
+    if (sessionID && !seenSessions.has(sessionID)) {
+      seenSessions.add(sessionID)
+      refreshInfo(sessionID)
+    }
+    if (INFO_TRIGGERS.has(type)) refreshInfo(sessionID)
     if (type === "session.created" && sessionID && pendingIdle.has(sessionID)) {
       clearTimeout(pendingIdle.get(sessionID))
       pendingIdle.delete(sessionID)
@@ -328,13 +348,17 @@ export async function setup(ctx, options = {}) {
   const closeSession = options.closeSession || makeCloseApplier(ctx)
   const optionsProvider = options.optionsProvider || makeOptionsApplier(ctx)
   const switchSession = options.switchSession || makeSwitchApplier(ctx)
-  const getSessionTitle =
-    options.getSessionTitle ||
+  const getSessionInfo =
+    options.getSessionInfo ||
     (async ({ sessionID }) => {
       const info = await ctx.session.get({ sessionID })
-      return info && (info.title || info.name)
+      if (!info) return null
+      return {
+        title: info.title || info.name,
+        cost: typeof info.cost === "number" ? info.cost : undefined,
+      }
     })
-  const bridge = buildBridge({ ...options, applyPermission, applyQuestion, applyPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession, getSessionTitle })
+  const bridge = buildBridge({ ...options, applyPermission, applyQuestion, applyPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession, getSessionInfo })
   dbg("setup", { port: bridge.config.port, host: bridge.config.host })
 
   try {

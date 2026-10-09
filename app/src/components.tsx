@@ -1,9 +1,12 @@
 import { useRef, useState, type ReactNode } from "react"
 import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
-import type { PendingRequest, Session } from "./events"
+import type { PendingRequest, QuestionOption, Session } from "./events"
+import { optionValue } from "./events"
 import type { Aggregate } from "./aggregate"
 import type { Theme } from "./theme"
+import { dirName } from "./paths"
+import { formatCost } from "./format"
 import { FadeIn, GlowDot, GradientGlowButton, GradientSurface, PressableScale } from "./ui"
 import type { Styles } from "./styles"
 
@@ -140,6 +143,38 @@ export function ExpandableText({
   )
 }
 
+function OptionButton({
+  option,
+  selected,
+  onPress,
+  accessibilityLabel,
+  theme,
+  styles,
+}: {
+  option: QuestionOption
+  selected?: boolean
+  onPress: () => void
+  accessibilityLabel: string
+  theme: Theme
+  styles: Styles
+}) {
+  const opacity = selected === false ? 0.55 : 1
+  return (
+    <View style={styles.optionRow}>
+      <View style={styles.optionButtonWrap}>
+        <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
+          <View style={[styles.actionInner, { backgroundColor: theme.option, opacity }]}>
+            <Text style={styles.actionText}>{option.label}</Text>
+          </View>
+        </PressableScale>
+      </View>
+      {option.description ? (
+        <Text style={[styles.optionDescription, { color: theme.questionText }]}>{option.description}</Text>
+      ) : null}
+    </View>
+  )
+}
+
 export function MultiQuestionForm({
   request,
   resolve,
@@ -167,18 +202,21 @@ export function MultiQuestionForm({
             <Text style={styles.fieldLabel}>{question.title}</Text>
             {question.summary ? <Text style={styles.fieldDescription}>{question.summary}</Text> : null}
             {question.options.length > 0 ? (
-              <View style={styles.actions}>
-                {question.options.map((option) => (
-                  <PressableScale
-                    key={option}
-                    onPress={() => setAnswer(question.key, option)}
-                    accessibilityLabel={`${question.title}: ${option}`}
-                  >
-                    <View style={[styles.actionInner, { backgroundColor: theme.option, opacity: selected === option ? 1 : 0.55 }]}>
-                      <Text style={styles.actionText}>{option}</Text>
-                    </View>
-                  </PressableScale>
-                ))}
+              <View style={styles.optionList}>
+                {question.options.map((option) => {
+                  const value = optionValue(option)
+                  return (
+                    <OptionButton
+                      key={option.label}
+                      option={option}
+                      selected={selected === value}
+                      onPress={() => setAnswer(question.key, value)}
+                      accessibilityLabel={`${question.title}: ${option.label}`}
+                      theme={theme}
+                      styles={styles}
+                    />
+                  )
+                })}
               </View>
             ) : null}
             {question.allowFreeform ? (
@@ -246,13 +284,16 @@ export function PendingActions({
   return (
     <>
       {options.length > 0 ? (
-        <View style={styles.actions}>
+        <View style={styles.optionList}>
           {options.map((option) => (
-            <PressableScale key={option} onPress={() => resolve(request.requestID, option)} accessibilityLabel={option}>
-              <View style={[styles.actionInner, { backgroundColor: theme.option }]}>
-                <Text style={styles.actionText}>{option}</Text>
-              </View>
-            </PressableScale>
+            <OptionButton
+              key={option.label}
+              option={option}
+              onPress={() => resolve(request.requestID, optionValue(option))}
+              accessibilityLabel={option.label}
+              theme={theme}
+              styles={styles}
+            />
           ))}
         </View>
       ) : null}
@@ -439,6 +480,203 @@ export function SwitcherModal({
   )
 }
 
+export function ManualConnectModal({
+  visible,
+  error,
+  onConnect,
+  onClose,
+  theme,
+  styles,
+}: {
+  visible: boolean
+  error?: string | null
+  onConnect: (address: string, port: string) => void
+  onClose: () => void
+  theme: Theme
+  styles: Styles
+}) {
+  const [address, setAddress] = useState("")
+  const [port, setPort] = useState("38963")
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.confirmBackdrop}>
+        <View style={[styles.confirmCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={styles.confirmTitle}>Connect by address</Text>
+          <Text style={styles.confirmMessage}>
+            Use this when the Mac is not discoverable over Bluetooth. Enter the address and port the helper shows.
+          </Text>
+          <Text style={styles.fieldLabel}>Address</Text>
+          <TextInput
+            style={styles.inputFull}
+            value={address}
+            onChangeText={setAddress}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            placeholder="192.168.1.10"
+            placeholderTextColor={theme.textMuted}
+            accessibilityLabel="Address"
+          />
+          <Text style={styles.fieldLabel}>Port</Text>
+          <TextInput
+            style={styles.inputFull}
+            value={port}
+            onChangeText={setPort}
+            keyboardType="number-pad"
+            placeholder="38963"
+            placeholderTextColor={theme.textMuted}
+            accessibilityLabel="Port"
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <View style={styles.confirmActions}>
+            <PressableScale onPress={onClose} accessibilityLabel="Cancel">
+              <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
+                <Text style={[styles.actionText, { color: theme.text }]}>Cancel</Text>
+              </View>
+            </PressableScale>
+            <PressableScale onPress={() => onConnect(address, port)} accessibilityLabel="Connect">
+              <View style={[styles.actionInner, { backgroundColor: theme.allow }]}>
+                <Text style={styles.actionText}>Connect</Text>
+              </View>
+            </PressableScale>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+export function PairingCodeModal({
+  visible,
+  error,
+  onSubmit,
+  onCancel,
+  theme,
+  styles,
+}: {
+  visible: boolean
+  error?: string | null
+  onSubmit: (code: string) => void
+  onCancel: () => void
+  theme: Theme
+  styles: Styles
+}) {
+  const [code, setCode] = useState("")
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.confirmBackdrop}>
+        <View style={[styles.confirmCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={styles.confirmTitle}>Enter the pairing code</Text>
+          <Text style={styles.confirmMessage}>
+            Type the code shown on your Mac (open the informer helper menu) to finish pairing.
+          </Text>
+          <TextInput
+            style={styles.inputFull}
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="123456"
+            placeholderTextColor={theme.textMuted}
+            accessibilityLabel="Pairing code"
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <View style={styles.confirmActions}>
+            <PressableScale onPress={onCancel} accessibilityLabel="Cancel">
+              <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
+                <Text style={[styles.actionText, { color: theme.text }]}>Cancel</Text>
+              </View>
+            </PressableScale>
+            <PressableScale onPress={() => onSubmit(code)} accessibilityLabel="Pair">
+              <View style={[styles.actionInner, { backgroundColor: theme.allow }]}>
+                <Text style={styles.actionText}>Pair</Text>
+              </View>
+            </PressableScale>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function MessageModal({
+  text,
+  onClose,
+  theme,
+  styles,
+}: {
+  text: string
+  onClose: () => void
+  theme: Theme
+  styles: Styles
+}) {
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.confirmBackdrop}>
+        <View style={[styles.confirmCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Text style={styles.confirmTitle}>Message</Text>
+          <ScrollView style={styles.messageScroll}>
+            <LinkText text={text} style={styles.messageFull} styles={styles} />
+          </ScrollView>
+          <View style={styles.confirmActions}>
+            <PressableScale onPress={onClose} accessibilityLabel="Close">
+              <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
+                <Text style={[styles.actionText, { color: theme.text }]}>Close</Text>
+              </View>
+            </PressableScale>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
+function ActivityCard({ text, theme, styles }: { text: string; theme: Theme; styles: Styles }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <PressableScale onPress={() => setOpen(true)} accessibilityLabel="Read full message">
+        <View style={styles.messageCard}>
+          <LinkText text={text} style={styles.activityText} numberOfLines={3} styles={styles} />
+        </View>
+      </PressableScale>
+      {open ? <MessageModal text={text} onClose={() => setOpen(false)} theme={theme} styles={styles} /> : null}
+    </>
+  )
+}
+
+function ActivityHistory({
+  session,
+  theme,
+  styles,
+  expand = false,
+}: {
+  session: Session
+  theme: Theme
+  styles: Styles
+  expand?: boolean
+}) {
+  const [showEarlier, setShowEarlier] = useState(false)
+  const history = session.activityHistory ?? (session.lastActivity ? [session.lastActivity] : [])
+  if (history.length === 0) return null
+  const latest = history[history.length - 1]
+  const older = history.slice(0, -1)
+  const visible = expand || showEarlier ? history : [latest]
+  return (
+    <View style={styles.activityBlock}>
+      {!expand && older.length > 0 ? (
+        <TouchableOpacity onPress={() => setShowEarlier((value) => !value)} activeOpacity={0.7}>
+          <Text style={styles.moreLink}>{showEarlier ? "hide earlier" : `show earlier (${older.length})`}</Text>
+        </TouchableOpacity>
+      ) : null}
+      {visible.map((text, index) => (
+        <ActivityCard key={`${index}-${text.slice(0, 16)}`} text={text} theme={theme} styles={styles} />
+      ))}
+    </View>
+  )
+}
+
 export function SessionCard({
   session,
   requests,
@@ -482,9 +720,9 @@ export function SessionCard({
         <View style={styles.sessionHeader}>
           <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={9} pulse={session.phase === "running"} />
           <Text style={styles.sessionTitle} numberOfLines={1}>
-            {session.title || session.cwd || session.id}
+            {session.title || dirName(session.cwd) || session.id}
           </Text>
-          {session.phase === "running" && onStop ? (
+          {(session.phase === "running" || session.phase === "waiting-permission" || session.phase === "waiting-answer") && onStop ? (
             <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
               <View style={styles.stopButton}>
                 <Text style={styles.stopButtonText}>Stop</Text>
@@ -499,23 +737,21 @@ export function SessionCard({
           ) : null}
         </View>
         <View style={styles.metaRow}>
+          {session.cwd ? <Text style={styles.dirChip}>{dirName(session.cwd)}</Text> : null}
           <PressableScale onPress={() => onOpenSwitcher?.(session)} accessibilityLabel="Change mode and model">
             <Text style={styles.metaChip}>
               {session.agent || "agent"}
               {session.model ? ` · ${session.model}` : ""}
             </Text>
           </PressableScale>
+          {typeof session.cost === "number" ? <Text style={styles.costChip}>{formatCost(session.cost)}</Text> : null}
         </View>
         <View style={styles.badges}>
           {session.currentTool ? <Text style={styles.badge}>tool · {session.currentTool}</Text> : null}
           <Text style={styles.badge}>{session.subagents ?? 0} subagents</Text>
           <Text style={styles.badge}>{session.shells ?? 0} shells</Text>
         </View>
-        {session.lastActivity ? (
-          <View style={styles.activityBlock}>
-            <ExpandableText text={session.lastActivity} style={styles.activityText} styles={styles} />
-          </View>
-        ) : null}
+        <ActivityHistory session={session} theme={theme} styles={styles} expand={Boolean(request)} />
         {request ? (
           <View style={[styles.inlineGlow, { shadowColor: glow }]}>
             <LinearGradient colors={bgGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inlineGradient}>
@@ -641,7 +877,7 @@ export function PreviewScreen({ onClose, theme, styles, resolve }: { onClose: ()
           <FadeIn delay={40}>
             <SessionCard
               session={{ id: "s3", agent: "opencode", cwd: "/Users/dev/web", phase: "waiting-answer", currentTool: null, lastActivity: "Which database should I use?", subagents: 1, shells: 0, updatedAt: 0 }}
-              requests={[{ requestID: "q1", sessionID: "s3", kind: "question", title: "Which database should I use?", options: ["PostgreSQL", "SQLite", "MySQL"] }]}
+              requests={[{ requestID: "q1", sessionID: "s3", kind: "question", title: "Which database should I use?", options: [{ label: "PostgreSQL", description: "Managed relational database" }, { label: "SQLite" }, { label: "MySQL" }] }]}
               resolve={resolve}
               theme={theme}
               styles={styles}
@@ -662,7 +898,7 @@ export function PreviewScreen({ onClose, theme, styles, resolve }: { onClose: ()
           <Text style={styles.section}>Needs attention (no session)</Text>
           <FadeIn>
             <NeedsAttentionCard
-              request={{ requestID: "o1", sessionID: "orphan", kind: "question", title: "A session asked something", options: ["Yes", "No"] }}
+              request={{ requestID: "o1", sessionID: "orphan", kind: "question", title: "A session asked something", options: [{ label: "Yes" }, { label: "No" }] }}
               resolve={resolve}
               theme={theme}
               styles={styles}

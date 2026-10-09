@@ -3,8 +3,9 @@
 use std::time::Duration;
 
 use anyhow::Context;
+use serde_json::Value;
 
-use crate::contract::{BRIDGE_PORT, PAIR_DECISION_PATH};
+use crate::contract::{BRIDGE_PORT, PAIR_CODE_PATH, PAIR_DECISION_PATH};
 
 /// Talks to the plugin bridge (defaults to `http://127.0.0.1:38963`).
 ///
@@ -42,6 +43,22 @@ impl BridgeClient {
             .send_json(&body)
             .with_context(|| format!("POST {url} failed"))?;
         Ok(())
+    }
+
+    /// Read the current pairing code the bridge wants the helper to display.
+    pub fn pairing_code(&self) -> anyhow::Result<String> {
+        let url = format!("{}{PAIR_CODE_PATH}", self.base);
+        let value: Value = ureq::get(&url)
+            .timeout(Duration::from_secs(5))
+            .call()
+            .with_context(|| format!("GET {url} failed"))?
+            .into_json()
+            .with_context(|| format!("GET {url}: invalid JSON"))?;
+        Ok(value
+            .get("code")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string())
     }
 }
 
