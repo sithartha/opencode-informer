@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native"
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, useColorScheme, View, type LayoutChangeEvent } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { useBridge } from "./src/useBridge"
 import type { PendingRequest, Session } from "./src/events"
@@ -8,7 +8,7 @@ import { aggregate } from "./src/aggregate"
 import { resolveTheme, type ThemeMode } from "./src/theme"
 import { createStyles } from "./src/styles"
 import { joinHostPort } from "./src/manualConnect"
-import { BrandMark, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
+import { BrandMark, CompactHero, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
 import { DemoScreen } from "./src/DemoScreen"
 import { FadeIn, GlowDot, PressableScale } from "./src/ui"
 
@@ -28,6 +28,7 @@ export default function App() {
     paired,
     connect,
     connectManual,
+    disconnect,
     resolve,
     sendPrompt,
     startSession,
@@ -59,6 +60,7 @@ export default function App() {
   const [showPreview, setShowPreview] = useState(false)
   const [showDemo, setShowDemo] = useState(false)
   const [confirmAction, setConfirmAction] = useState<{ kind: "stop" | "close"; sessionID?: string } | null>(null)
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [switcherSession, setSwitcherSession] = useState<Session | null>(null)
   const [switchOptions, setSwitchOptions] = useState<{ agents: string[]; models: { providerID: string; id: string; name?: string }[] }>({ agents: [], models: [] })
   const [startDraft, setStartDraft] = useState<{ agent?: string; model?: { providerID: string; id: string } } | null>(null)
@@ -66,6 +68,21 @@ export default function App() {
 
   const scrollRef = useRef<ScrollView>(null)
   const offsetRef = useRef(0)
+  const waitingYRef = useRef(0)
+  const markWaiting = useCallback((event: LayoutChangeEvent) => {
+    waitingYRef.current = event.nativeEvent.layout.y
+  }, [])
+  const scrollToWaiting = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, waitingYRef.current - 12), animated: true })
+  }, [])
+
+  // Scroll-driven collapse of the hero into the pinned compact bar.
+  const heroScrollY = useRef(new Animated.Value(0)).current
+  const heroExpandedOpacity = heroScrollY.interpolate({ inputRange: [0, 72], outputRange: [1, 0], extrapolate: "clamp" })
+  const heroExpandedScale = heroScrollY.interpolate({ inputRange: [0, 72], outputRange: [1, 0.96], extrapolate: "clamp" })
+  const heroExpandedTranslate = heroScrollY.interpolate({ inputRange: [0, 72], outputRange: [0, -12], extrapolate: "clamp" })
+  const heroCompactOpacity = heroScrollY.interpolate({ inputRange: [36, 104], outputRange: [0, 1], extrapolate: "clamp" })
+  const heroCompactTranslate = heroScrollY.interpolate({ inputRange: [36, 104], outputRange: [-8, 0], extrapolate: "clamp" })
   const keyboardRef = useRef(0)
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   useEffect(() => {
@@ -139,6 +156,7 @@ export default function App() {
     ;(pendingBySession[request.sessionID] ??= []).unshift(request)
   }
   const orphanPending = pending.filter((request) => !appState.sessions[request.sessionID]).reverse()
+  const firstWaitingSessionID = sessions.find((session) => (pendingBySession[session.id] ?? []).length > 0)?.id
 
   const statusColor =
     connection.status === "connected" ? theme.allow : connection.status === "disconnected" ? theme.deny : theme.accent
@@ -147,7 +165,7 @@ export default function App() {
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
       <StatusBar style={theme.dark ? "light" : "dark"} />
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScroll={(event) => { offsetRef.current = event.nativeEvent.contentOffset.y }} scrollEventThrottle={16}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScroll={(event) => { const y = event.nativeEvent.contentOffset.y; offsetRef.current = y; heroScrollY.setValue(y) }} scrollEventThrottle={16}>
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
             <BrandMark theme={theme} />
@@ -158,18 +176,20 @@ export default function App() {
           </PressableScale>
         </View>
 
-        <View style={styles.statusPill}>
-          <GlowDot color={statusColor} size={8} pulse={connection.status === "connecting" || connection.status === "discovering"} />
-          <Text style={styles.statusText}>
-            {connection.status}
-            {connection.macName ? ` · ${connection.macName}` : ""}
-          </Text>
-        </View>
+        <PressableScale onPress={paired ? () => setConfirmDisconnect(true) : undefined} accessibilityLabel="Connection">
+          <View style={styles.statusPill}>
+            <GlowDot color={statusColor} size={8} pulse={connection.status === "connecting" || connection.status === "discovering"} />
+            <Text style={styles.statusText}>
+              {connection.status}
+              {connection.macName ? ` · ${connection.macName}` : ""}
+            </Text>
+          </View>
+        </PressableScale>
         {connection.error ? <Text style={styles.error}>{connection.error}</Text> : null}
 
-        <FadeIn style={styles.heroWrap}>
-          <HeroCard agg={agg} theme={theme} styles={styles} onStart={() => void beginStart()} />
-        </FadeIn>
+        <Animated.View style={[styles.heroWrap, { opacity: heroExpandedOpacity, transform: [{ scale: heroExpandedScale }, { translateY: heroExpandedTranslate }] }]}>
+          <HeroCard agg={agg} theme={theme} styles={styles} onStart={() => void beginStart()} onReviewWaiting={scrollToWaiting} />
+        </Animated.View>
 
         {!paired ? (
           <View style={styles.connectBlock}>
@@ -191,9 +211,11 @@ export default function App() {
           <>
             <Text style={styles.section}>Needs attention</Text>
             {orphanPending.map((request, index) => (
-              <FadeIn key={request.requestID} delay={index * 50} style={styles.cardGap}>
-                <NeedsAttentionCard request={request} resolve={resolve} theme={theme} styles={styles} onFieldFocus={focusField} />
-              </FadeIn>
+              <View key={request.requestID} onLayout={index === 0 ? markWaiting : undefined}>
+                <FadeIn delay={index * 50} style={styles.cardGap}>
+                  <NeedsAttentionCard request={request} resolve={resolve} theme={theme} styles={styles} onFieldFocus={focusField} />
+                </FadeIn>
+              </View>
             ))}
           </>
         ) : null}
@@ -207,24 +229,33 @@ export default function App() {
           </View>
         ) : null}
         {sessions.map((session, index) => (
-          <FadeIn key={session.id} delay={index * 50} style={styles.cardGap}>
-            <SessionCard
-              session={session}
-              requests={pendingBySession[session.id] ?? []}
-              resolve={resolve}
-              theme={theme}
-              styles={styles}
-              onFieldFocus={focusField}
-              onSendPrompt={sendPrompt}
-              onStop={(sessionID) => setConfirmAction({ kind: "stop", sessionID })}
-              onClose={(sessionID) => setConfirmAction({ kind: "close", sessionID })}
-              onOpenSwitcher={(value) => void openSwitcher(value)}
-            />
-          </FadeIn>
+          <View key={session.id} onLayout={orphanPending.length === 0 && session.id === firstWaitingSessionID ? markWaiting : undefined}>
+            <FadeIn delay={index * 50} style={styles.cardGap}>
+              <SessionCard
+                session={session}
+                requests={pendingBySession[session.id] ?? []}
+                resolve={resolve}
+                theme={theme}
+                styles={styles}
+                onFieldFocus={focusField}
+                onSendPrompt={sendPrompt}
+                onStop={(sessionID) => setConfirmAction({ kind: "stop", sessionID })}
+                onClose={(sessionID) => setConfirmAction({ kind: "close", sessionID })}
+                onOpenSwitcher={(value) => void openSwitcher(value)}
+              />
+            </FadeIn>
+          </View>
         ))}
         {keyboardHeight > 0 ? <View style={{ height: keyboardHeight + 24 }} /> : null}
       </ScrollView>
       </KeyboardAvoidingView>
+
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.compactHero, { opacity: heroCompactOpacity, transform: [{ translateY: heroCompactTranslate }] }]}
+      >
+        <CompactHero agg={agg} server={connection.macName} connected={connection.status === "connected"} theme={theme} styles={styles} />
+      </Animated.View>
 
       <Modal visible={showSettings} animationType="slide" onRequestClose={() => setShowSettings(false)}>
         <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
@@ -335,6 +366,20 @@ export default function App() {
         error={pairingCodeError}
         onSubmit={(code) => void submitPairingCode(code)}
         onCancel={cancelPairingCode}
+        theme={theme}
+        styles={styles}
+      />
+
+      <ConfirmModal
+        visible={confirmDisconnect}
+        title={connection.macName ? `Disconnect from ${connection.macName}?` : "Disconnect?"}
+        message="The app will stop receiving agent activity until you connect again."
+        confirmLabel="Disconnect"
+        onConfirm={() => {
+          setConfirmDisconnect(false)
+          void disconnect()
+        }}
+        onCancel={() => setConfirmDisconnect(false)}
         theme={theme}
         styles={styles}
       />

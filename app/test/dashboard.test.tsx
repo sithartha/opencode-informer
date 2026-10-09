@@ -1,6 +1,6 @@
 import { fireEvent, render } from "@testing-library/react-native"
 import { Linking } from "react-native"
-import { ConfirmModal, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, SessionCard, SwitcherModal } from "../src/components"
+import { BrandMark, CompactHero, ConfirmModal, GradientButton, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, SessionCard, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
 import { createStyles } from "../src/styles"
 import { darkTheme, lightTheme } from "../src/theme"
@@ -23,32 +23,76 @@ function session(overrides: Partial<Session> = {}): Session {
   }
 }
 
+describe("CompactHero", () => {
+  it("shows a colored dot and count per state", async () => {
+    const { getByText } = await render(
+      <CompactHero agg={{ total: 14, running: 2, waitingApproval: 3, waitingAnswer: 4, stopped: 5 }} server="192.168.1.62" connected theme={lightTheme} styles={styles} />,
+    )
+    expect(getByText("2")).toBeTruthy()
+    expect(getByText("3")).toBeTruthy()
+    expect(getByText("4")).toBeTruthy()
+    expect(getByText("5")).toBeTruthy()
+    expect(getByText("192.168.1.62")).toBeTruthy()
+  })
+
+  it("omits the server pill when there is no server", async () => {
+    const { queryByText } = await render(
+      <CompactHero agg={{ total: 0, running: 0, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }} theme={lightTheme} styles={styles} />,
+    )
+    expect(queryByText("192.168.1.62")).toBeNull()
+  })
+})
+
 describe("HeroCard", () => {
-  it("shows the total, per-state counts, and labels", async () => {
+  it("leads with the agents that need the user", async () => {
     const { getByText } = await render(
       <HeroCard agg={{ total: 3, running: 2, waitingApproval: 1, waitingAnswer: 0, stopped: 1 }} theme={lightTheme} styles={styles} />,
     )
-    expect(getByText("3")).toBeTruthy()
-    expect(getByText("active agents")).toBeTruthy()
+    expect(getByText("1")).toBeTruthy()
+    expect(getByText("agent needs you")).toBeTruthy()
     expect(getByText("2 working")).toBeTruthy()
     expect(getByText("1 inactive")).toBeTruthy()
     expect(getByText("1 permission")).toBeTruthy()
-    expect(getByText("0 question")).toBeTruthy()
   })
 
-  it("uses the singular label for one agent", async () => {
+  it("sums permissions and questions in the primary figure", async () => {
+    const { getByText } = await render(
+      <HeroCard agg={{ total: 4, running: 2, waitingApproval: 1, waitingAnswer: 1, stopped: 0 }} theme={lightTheme} styles={styles} />,
+    )
+    expect(getByText("2")).toBeTruthy()
+    expect(getByText("agents need you")).toBeTruthy()
+  })
+
+  it("shows an all-clear state when only agents are working", async () => {
     const { getByText } = await render(
       <HeroCard agg={{ total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }} theme={lightTheme} styles={styles} />,
     )
-    expect(getByText("active agent")).toBeTruthy()
+    expect(getByText("All clear")).toBeTruthy()
+    expect(getByText("Nothing needs you")).toBeTruthy()
+    expect(getByText("1 working")).toBeTruthy()
   })
 
-  it("renders the empty state for zero agents", async () => {
+  it("shows an idle state when nothing is active", async () => {
     const { getByText } = await render(
       <HeroCard agg={{ total: 0, running: 0, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }} theme={darkTheme} styles={createStyles(darkTheme)} />,
     )
-    expect(getByText("0")).toBeTruthy()
+    expect(getByText("No active agents")).toBeTruthy()
+    expect(getByText("Nothing is running")).toBeTruthy()
     expect(getByText("0 working")).toBeTruthy()
+  })
+
+  it("offers review only while something is waiting", async () => {
+    const onReviewWaiting = jest.fn()
+    const waiting = await render(
+      <HeroCard agg={{ total: 2, running: 1, waitingApproval: 0, waitingAnswer: 1, stopped: 0 }} theme={lightTheme} styles={styles} onReviewWaiting={onReviewWaiting} />,
+    )
+    await fireEvent.press(waiting.getByText("Review 1 waiting"))
+    expect(onReviewWaiting).toHaveBeenCalledTimes(1)
+
+    const clear = await render(
+      <HeroCard agg={{ total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }} theme={lightTheme} styles={styles} onReviewWaiting={onReviewWaiting} />,
+    )
+    expect(clear.queryByText("Review 1 waiting")).toBeNull()
   })
 })
 

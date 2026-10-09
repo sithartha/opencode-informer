@@ -7,7 +7,7 @@ import type { Aggregate } from "./aggregate"
 import type { Theme } from "./theme"
 import { dirName } from "./paths"
 import { formatCost } from "./format"
-import { FadeIn, GlowDot, GradientGlowButton, GradientSurface, PressableScale } from "./ui"
+import { FadeIn, GlowDot, GradientSurface, PressableScale } from "./ui"
 import type { Styles } from "./styles"
 
 export const PHASE_COLORS: Record<string, string> = {
@@ -310,40 +310,47 @@ export function PendingActions({
   )
 }
 
-export function HeroCard({ agg, theme, styles, onStart }: { agg: Aggregate; theme: Theme; styles: Styles; onStart?: () => void }) {
-  const hasPermission = agg.waitingApproval > 0
-  const hasQuestion = agg.waitingAnswer > 0
-  const needsYou = hasPermission || hasQuestion
-  const border = hasPermission ? theme.permissionBorder : hasQuestion ? theme.questionBorder : theme.cardBorder
-  const glow = hasPermission ? theme.permissionGlow : hasQuestion ? theme.questionGlow : theme.glow
+export function HeroCard({
+  agg,
+  theme,
+  styles,
+  onStart,
+  onReviewWaiting,
+}: {
+  agg: Aggregate
+  theme: Theme
+  styles: Styles
+  onStart?: () => void
+  onReviewWaiting?: () => void
+}) {
+  const needsYou = agg.waitingApproval + agg.waitingAnswer
+  const hasAttention = needsYou > 0
+  const idle = agg.total === 0
+  const border = agg.waitingApproval > 0 ? theme.permissionBorder : agg.waitingAnswer > 0 ? theme.questionBorder : theme.cardBorder
+  const glow = agg.waitingApproval > 0 ? theme.permissionGlow : agg.waitingAnswer > 0 ? theme.questionGlow : theme.glow
   return (
     <GradientSurface
       colors={border}
       glow={glow}
-      pulse={needsYou}
-      shimmer={needsYou}
-      shimmerLoop={needsYou}
-      animatedBorder={needsYou}
+      pulse={hasAttention}
+      shimmer={hasAttention}
+      shimmerLoop={hasAttention}
+      animatedBorder={hasAttention}
       radius={22}
       innerStyle={{ backgroundColor: theme.surface }}
     >
       <View style={styles.heroInner}>
-        <View style={styles.heroCountRow}>
-          <Text style={styles.heroCount}>{agg.total}</Text>
-          {onStart ? (
-            <GradientGlowButton
-              colors={["#8A6BFF", "#5AA9FF", "#FF7AD9", "#8A6BFF"]}
-              onPress={onStart}
-              accessibilityLabel="Start a new session"
-            >
-              <View style={styles.sparkleWrap}>
-                <Text style={styles.sparkleMain}>✦</Text>
-                <Text style={styles.sparkleMini}>✦</Text>
-              </View>
-            </GradientGlowButton>
-          ) : null}
-        </View>
-        <Text style={styles.heroLabel}>active {agg.total === 1 ? "agent" : "agents"}</Text>
+        {hasAttention ? (
+          <>
+            <Text style={styles.heroCount}>{needsYou}</Text>
+            <Text style={styles.heroLabel}>{needsYou === 1 ? "agent needs you" : "agents need you"}</Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.heroStatus}>{idle ? "No active agents" : "All clear"}</Text>
+            <Text style={styles.heroLabel}>{idle ? "Nothing is running" : "Nothing needs you"}</Text>
+          </>
+        )}
         <View style={styles.heroBreakdown}>
           <View style={styles.heroStat}>
             <GlowDot color={PHASE_COLORS.running} size={7} pulse={agg.running > 0} />
@@ -354,18 +361,83 @@ export function HeroCard({ agg, theme, styles, onStart }: { agg: Aggregate; them
             <Text style={styles.heroStatText}>{agg.stopped} inactive</Text>
           </View>
         </View>
-        <View style={[styles.heroBreakdown, styles.heroBreakdownSecond]}>
-          <View style={styles.heroStat}>
-            <GlowDot color={PHASE_COLORS["waiting-permission"]} size={7} pulse={agg.waitingApproval > 0} />
-            <Text style={styles.heroStatText}>{agg.waitingApproval} permission</Text>
+        {hasAttention ? (
+          <View style={[styles.heroBreakdown, styles.heroBreakdownSecond]}>
+            <View style={styles.heroStat}>
+              <GlowDot color={PHASE_COLORS["waiting-permission"]} size={7} pulse={agg.waitingApproval > 0} />
+              <Text style={styles.heroStatText}>{agg.waitingApproval} permission</Text>
+            </View>
+            <View style={styles.heroStat}>
+              <GlowDot color={PHASE_COLORS["waiting-answer"]} size={7} pulse={agg.waitingAnswer > 0} />
+              <Text style={styles.heroStatText}>{agg.waitingAnswer} question</Text>
+            </View>
           </View>
-          <View style={styles.heroStat}>
-            <GlowDot color={PHASE_COLORS["waiting-answer"]} size={7} pulse={agg.waitingAnswer > 0} />
-            <Text style={styles.heroStatText}>{agg.waitingAnswer} question</Text>
+        ) : null}
+        {(hasAttention && onReviewWaiting) || onStart ? (
+          <View style={styles.heroActions}>
+            {hasAttention && onReviewWaiting ? (
+              <GradientButton
+                label={`Review ${needsYou} waiting`}
+                onPress={onReviewWaiting}
+                styles={styles}
+                colors={agg.waitingApproval > 0 ? theme.permissionBorder : theme.questionBorder}
+              />
+            ) : null}
+            {onStart ? (
+              <PressableScale onPress={onStart} accessibilityLabel="Start a new session">
+                <View style={styles.heroSecondary}>
+                  <Text style={styles.heroSecondaryText}>New session</Text>
+                </View>
+              </PressableScale>
+            ) : null}
           </View>
-        </View>
+        ) : null}
       </View>
     </GradientSurface>
+  )
+}
+
+export function CompactHero({
+  agg,
+  server,
+  connected,
+  theme,
+  styles,
+}: {
+  agg: Aggregate
+  server?: string
+  connected?: boolean
+  theme: Theme
+  styles: Styles
+}) {
+  const stats = [
+    { color: PHASE_COLORS.running, count: agg.running, pulse: agg.running > 0 },
+    { color: PHASE_COLORS["waiting-permission"], count: agg.waitingApproval, pulse: agg.waitingApproval > 0 },
+    { color: PHASE_COLORS["waiting-answer"], count: agg.waitingAnswer, pulse: agg.waitingAnswer > 0 },
+    { color: PHASE_COLORS.completed, count: agg.stopped, pulse: false },
+  ]
+  return (
+    <View style={styles.compactRow}>
+      <View style={styles.compactBrand}>
+        <BrandMark theme={theme} />
+        {server ? (
+          <View style={styles.compactServerPill}>
+            <GlowDot color={connected ? theme.allow : theme.deny} size={6} pulse={!connected} />
+            <Text style={styles.compactServerText} numberOfLines={1}>
+              {server}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.compactDots}>
+        {stats.map((stat, index) => (
+          <View key={index} style={styles.compactItem}>
+            <GlowDot color={stat.color} size={8} pulse={stat.pulse} />
+            <Text style={styles.compactCount}>{stat.count}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
   )
 }
 

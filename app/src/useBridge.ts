@@ -57,6 +57,7 @@ export function useBridge() {
   const [pairingCodeRequest, setPairingCodeRequest] = useState<string | null>(null)
   const [pairingCodeError, setPairingCodeError] = useState<string | null>(null)
   const [diagnostic, setDiagnostic] = useState<string | null>(null)
+  const [manuallyDisconnected, setManuallyDisconnected] = useState(false)
   const diagnosticsRef = useRef(
     createDiagnostics({
       get: () => readSecure(DIAGNOSTIC_KEY),
@@ -89,6 +90,7 @@ export function useBridge() {
   const fetchBusyRef = useRef(false)
   const lastFetchMsRef = useRef(0)
   const pendingRef = useRef<Record<string, PendingRequest>>({})
+  const reconciledRef = useRef(false)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectDelayRef = useRef(2000)
   const disconnectedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -109,6 +111,10 @@ export function useBridge() {
     try {
       const snapshot = await fetchState(base, token)
       setAppState((prev) => ({ ...stateFromSnapshot(snapshot), recent: prev.recent }))
+      // A successful sync means we are in fact connected: reconcile the UI so a
+      // missed reconnect transition cannot leave the unpaired block or an old error.
+      setPaired(true)
+      dispatch({ type: "connected" })
       lastRefreshRef.current = Date.now()
       liveActivity.setStale(false)
       liveActivity.setDisconnected(false)
@@ -128,6 +134,13 @@ export function useBridge() {
   const handleEvent = useCallback((event: ActivityEvent) => {
     devLog("event", event.type)
     lastRefreshRef.current = Date.now()
+    // Receiving streamed events means the bridge is reachable; reconcile once so a
+    // missed reconnect transition cannot leave the unpaired block or an old error.
+    if (!reconciledRef.current) {
+      reconciledRef.current = true
+      setPaired(true)
+      dispatch({ type: "connected" })
+    }
     // Buzz when something needs the user while the app is in the foreground.
     if (isAttentionEvent(event.type) && RNAppState.currentState === "active") {
       Vibration.vibrate(200)
@@ -225,6 +238,7 @@ export function useBridge() {
       const snapshot = await fetchState(base, token)
       devLog("state", snapshot.activeSessionCount, "active")
       setAppState(stateFromSnapshot(snapshot))
+      setPaired(true)
       lastRefreshRef.current = Date.now()
       liveActivity.setStale(false)
       liveActivity.setDisconnected(false)
@@ -326,9 +340,27 @@ export function useBridge() {
 
   const connect = useCallback(async (): Promise<boolean> => {
     if (connectingRef.current) return false
+    setManuallyDisconnected(false)
     connectingRef.current = true
     try {
       dispatch({ type: "discover" })
+      // Prefer the last bridge we reached, so a reconnect does not need Bluetooth.
+      const lastHost = await getLastHost()
+      const lastPort = await getLastPort()
+      if (lastHost && lastPort) {
+        const remembered = baseUrl(lastHost, lastPort)
+        try {
+          dispatch({ type: "pairingStarted", macName: lastHost })
+          const result = await establish(remembered)
+          if (result === "connected") return true
+          if (result === "needs-code") {
+            setPairingCodeRequest(remembered)
+            return false
+          }
+        } catch {
+          // fall through to Bluetooth discovery
+        }
+      }
       const ble = bleRef.current ?? new BleClient()
       bleRef.current = ble
       ble.onDoorbell = (payload) => void handleDoorbell(payload)
@@ -352,6 +384,7 @@ export function useBridge() {
   const connectManual = useCallback(
     async (hostPort: string) => {
       devLog("connectManual", hostPort)
+      setManuallyDisconnected(false)
       const base = manualBase(hostPort)
       if (!base) {
         dispatch({ type: "failed", message: "Enter a valid address and port" })
@@ -415,6 +448,32 @@ export function useBridge() {
   const cancelPairingCode = useCallback(() => {
     setPairingCodeRequest(null)
     setPairingCodeError(null)
+  }, [])
+
+  // Drop the connection to the Mac and stay disconnected until the user reconnects.
+  const disconnect = useCallback(async () => {
+    streamRef.current?.stop()
+    streamRef.current = null
+    void bleRef.current?.disconnect()
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
+    if (disconnectedTimerRef.current) {
+      clearTimeout(disconnectedTimerRef.current)
+      disconnectedTimerRef.current = null
+    }
+    // Clear the endpoint too, otherwise the watchdog keeps resyncing from the old
+    // bridge and the app looks connected while it is actually unpaired.
+    baseRef.current = null
+    tokenRef.current = null
+    lastRefreshRef.current = 0
+    fetchBusyRef.current = false
+    reconciledRef.current = false
+    setPaired(false)
+    setManuallyDisconnected(true)
+    setAppState(emptyState())
+    dispatch({ type: "reset" })
   }, [])
 
   const setDeviceName = useCallback(async (name: string) => {
@@ -613,6 +672,7 @@ export function useBridge() {
   useEffect(() => {
     const subscription = RNAppState.addEventListener("change", (state) => {
       if (state !== "active") return
+      if (manuallyDisconnected) return
       if (paired) {
         // Coming back to the app: resync so pending cards are current.
         void refresh()
@@ -627,7 +687,7 @@ export function useBridge() {
       })()
     })
     return () => subscription.remove()
-  }, [connect, connectRemembered, paired, refresh])
+  }, [connect, connectRemembered, manuallyDisconnected, paired, refresh])
 
   useEffect(() => {
     if (startedRef.current) return
@@ -688,5 +748,5 @@ export function useBridge() {
     }
   }, [connect, connectManual, connectRemembered, resolve, refresh])
 
-  return { appState, connection, paired, connect, connectManual, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, themeMode, setThemeMode, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
+  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, themeMode, setThemeMode, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
 }
