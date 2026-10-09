@@ -1,11 +1,20 @@
-import { StyleSheet } from "react-native"
+import { Platform, StyleSheet } from "react-native"
 import type { Theme } from "./theme"
 
-export type Styles = ReturnType<typeof createStyles>
+export type Styles = ReturnType<typeof createDefaultStyles>
 
-// Design tokens: an 8-point spacing grid, a tight type scale, and soft tinted
-// shadows. Hierarchy comes from size and opacity, not from many weights.
-export function createStyles(t: Theme) {
+const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" })
+
+/** Dispatch to the skin's design system: Default rounded, or the angular HUD look. */
+export function createStyles(t: Theme): Styles {
+  if (t.skin === "evangelion") return createNervStyles(t) as unknown as Styles
+  if (t.skin === "starwars") return createStarWarsStyles(t) as unknown as Styles
+  if (t.skin === "sanrio") return createSanrioStyles(t)
+  return createDefaultStyles(t)
+}
+
+// --- Default skin: the original rounded design system ---
+function createDefaultStyles(t: Theme) {
   return StyleSheet.create({
     root: { flex: 1 },
     content: { padding: 20, paddingTop: 64, paddingBottom: 48 },
@@ -30,6 +39,39 @@ export function createStyles(t: Theme) {
     heroBreakdownSecond: { marginTop: 8 },
     heroStat: { flexDirection: "row", alignItems: "center", gap: 6 },
     heroStatText: { fontSize: 12, color: t.textSecondary },
+    heroWatermark: { position: "absolute", right: -28, top: -18, opacity: 0.12 },
+    magiHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    magiTitle: { fontSize: 12, fontWeight: "700", color: t.accent, letterSpacing: 2 },
+    magiStatus: { fontSize: 12, fontWeight: "600", color: t.textSecondary, letterSpacing: 1 },
+    magiCores: { flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 20, marginTop: 4 },
+    magiCore: { alignItems: "center", gap: 4 },
+    magiTriangle: { width: 0, height: 0, borderLeftWidth: 16, borderRightWidth: 16, borderBottomWidth: 26, borderLeftColor: "transparent", borderRightColor: "transparent" },
+    magiCoreLabel: { fontSize: 9, color: t.textMuted, letterSpacing: 0.5 },
+    magiCoreCount: { fontSize: 14, fontWeight: "700", color: t.text },
+    nervTag: { fontSize: 10, color: t.accent, letterSpacing: 2, fontWeight: "700" },
+    nervReadout: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, width: "100%", marginTop: 4 },
+    nervReadoutItem: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: t.border, backgroundColor: t.badgeBg, borderRadius: 3, paddingHorizontal: 10, paddingVertical: 5 },
+    nervReadoutLabel: { fontSize: 10, color: t.textMuted, letterSpacing: 1.5 },
+    nervReadoutValue: { fontSize: 12, fontWeight: "700", color: t.text },
+    kittyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    kittyBrand: { flexDirection: "row", alignItems: "center", gap: 6 },
+    kittyBow: { fontSize: 16, lineHeight: 18 },
+    kittyTitle: { fontSize: 12, fontWeight: "700", color: t.accent, letterSpacing: 1 },
+    kittyStatus: { fontSize: 12, fontWeight: "600", color: t.textSecondary },
+    kittyHeroGlow: { position: "absolute", top: 0, left: 0, right: 0, height: 170 },
+    kittyDivider: { width: "100%", height: 4, borderRadius: 999, marginTop: 2, marginBottom: 2 },
+    kittyChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 2 },
+    kittyChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: t.badgeBg, borderWidth: 1, borderColor: t.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+    kittyChipIcon: { fontSize: 12, lineHeight: 15 },
+    kittyChipValue: { fontSize: 13, fontWeight: "800", color: t.text },
+    kittyChipLabel: { fontSize: 11, color: t.textSecondary, fontWeight: "600" },
+    swFaction: { fontSize: 12, fontWeight: "700", color: t.accent, letterSpacing: 1, marginBottom: 4 },
+    swSaber: { height: 4, width: "100%", borderRadius: 2, marginBottom: 4 },
+    swHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    swStatus: { fontSize: 11, fontWeight: "700", color: t.accent, letterSpacing: 1 },
+    swSaberGlow: { width: "100%", marginBottom: 6, shadowColor: t.accent, shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
+    swReadout: { flexDirection: "row", gap: 14, justifyContent: "center", flexWrap: "wrap" },
+    swReadoutText: { fontSize: 10, color: t.textMuted, letterSpacing: 1 },
     heroAdd: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
     heroAddText: { fontSize: 24, fontWeight: "700", lineHeight: 26 },
     heroActions: { flexDirection: "row", gap: 12, marginTop: 4, flexWrap: "wrap", justifyContent: "center" },
@@ -65,6 +107,18 @@ export function createStyles(t: Theme) {
     rowButton: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingHorizontal: 16, minHeight: 52 },
     rowButtonText: { fontSize: 14, color: t.text, fontWeight: "600" },
     chevron: { fontSize: 20, color: t.textMuted },
+    themeCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 10 },
+    themeCardSelected: { borderColor: t.accent, borderWidth: 2 },
+    themeCardMain: { gap: 4, flexShrink: 1 },
+    themeCardText: { fontSize: 15, fontWeight: "600", color: t.text },
+    themeCardDesc: { fontSize: 12, color: t.textMuted, lineHeight: 16 },
+    themeCardRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+    themeSwatches: { flexDirection: "row", gap: 6 },
+    themeSwatch: { width: 16, height: 16, borderRadius: 4, borderWidth: 1, borderColor: t.border },
+    themePreview: { width: 84, height: 48, borderRadius: 10, borderWidth: 1, padding: 6 },
+    themePreviewCard: { flex: 1, borderRadius: 6, borderWidth: 1, padding: 5, justifyContent: "space-between" },
+    themePreviewLine: { width: 22, height: 4, borderRadius: 2 },
+    themePreviewAccent: { width: 30, height: 10, borderRadius: 4 },
     about: { fontSize: 14, color: t.textSecondary, lineHeight: 20, marginBottom: 8 },
 
     section: { fontSize: 12, fontWeight: "700", color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 24, marginBottom: 12 },
@@ -110,7 +164,7 @@ export function createStyles(t: Theme) {
     optionDescription: { fontSize: 12, lineHeight: 18, opacity: 0.85 },
     questionBlock: { marginTop: 16, gap: 4 },
     freeformRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 12 },
-    freeformInput: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, color: "#ffffff", backgroundColor: "rgba(255,255,255,0.12)", fontSize: 14, maxHeight: 96, textAlignVertical: "top" },
+    freeformInput: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 16, paddingTop: 13, paddingBottom: 10, fontSize: 14, maxHeight: 96, textAlignVertical: "top" },
 
     demoBanner: { marginTop: 16, borderRadius: 16, padding: 16, backgroundColor: t.badgeBg, borderWidth: 1, borderColor: t.border },
     demoBannerText: { fontSize: 12, color: t.textSecondary, lineHeight: 18 },
@@ -135,3 +189,209 @@ export function createStyles(t: Theme) {
     sparkleMini: { position: "absolute", top: -1, right: -2, color: "rgba(255,255,255,0.95)", fontSize: 11, lineHeight: 12 },
   })
 }
+
+// --- Sanrio (Hello Kitty / Chococat): the rounded system, with softer/larger radii and a styled hero ---
+function createSanrioStyles(t: Theme): Styles {
+  const base = createDefaultStyles(t)
+  const softer = {
+    gradientButton: { ...base.gradientButton, borderRadius: 18 },
+    input: { ...base.input, borderRadius: 18 },
+    inputFull: { ...base.inputFull, borderRadius: 18 },
+    rowButton: { ...base.rowButton, borderRadius: 20 },
+    themeCard: { ...base.themeCard, borderRadius: 20 },
+    themePreview: { ...base.themePreview, borderRadius: 14 },
+    emptyCard: { ...base.emptyCard, borderRadius: 28 },
+    activityBlock: { ...base.activityBlock, borderRadius: 22 },
+    messageCard: { ...base.messageCard, borderRadius: 18 },
+    inlineGlow: { ...base.inlineGlow, borderRadius: 22 },
+    inlineGradient: { ...base.inlineGradient, borderRadius: 22 },
+    actionInner: { ...base.actionInner, borderRadius: 16 },
+    heroSecondary: { ...base.heroSecondary, borderRadius: 999 },
+    demoBanner: { ...base.demoBanner, borderRadius: 22 },
+    confirmCard: { ...base.confirmCard, borderRadius: 28 },
+    segment: { ...base.segment, borderRadius: 18 },
+    segmentSelected: { ...base.segmentSelected, borderRadius: 14 },
+    segmentUnselected: { ...base.segmentUnselected, borderRadius: 14 },
+    heroInner: { padding: 26, alignItems: "center", gap: 10 },
+    heroCount: { ...base.heroCount, color: t.accent },
+    heroStatus: { ...base.heroStatus, color: t.accent },
+  }
+  return { ...base, ...softer } as unknown as Styles
+}
+
+// --- Angular HUD design system, shared by the Evangelion (NERV) and Star Wars skins ---
+function createHudStyles(t: Theme, R: number, R_INNER: number, R_CHIP: number, underlineSections = false) {
+  return StyleSheet.create({
+    root: { flex: 1 },
+    content: { padding: 20, paddingTop: 64, paddingBottom: 48 },
+
+    headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    headerLinks: { flexDirection: "row", alignItems: "center", gap: 16 },
+    brandRow: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
+    title: { fontSize: 20, fontWeight: "700", color: t.text, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: MONO },
+    settingsLink: { fontSize: 12, color: t.accent, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontFamily: MONO, paddingVertical: 12 },
+
+    statusPill: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, alignSelf: "flex-start", backgroundColor: t.badgeBg, paddingHorizontal: 12, paddingVertical: 8, borderRadius: R_CHIP, borderWidth: 1, borderColor: t.secondaryAccent },
+    statusText: { fontSize: 12, color: t.textSecondary, fontWeight: "700", letterSpacing: 0.5, fontFamily: MONO },
+    error: { fontSize: 13, color: t.error, marginTop: 8, lineHeight: 18, fontFamily: MONO },
+
+    heroWrap: { marginTop: 20, marginBottom: 8 },
+    heroInner: { padding: 20, alignItems: "center", gap: 8 },
+    heroCountRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+    heroCount: { fontSize: 44, fontWeight: "700", color: t.text, letterSpacing: -1, fontFamily: MONO },
+    heroLabel: { fontSize: 12, color: t.textSecondary, letterSpacing: 1.5, textTransform: "uppercase", fontFamily: MONO },
+    heroStatus: { fontSize: 22, fontWeight: "700", color: t.accent, letterSpacing: 1, textTransform: "uppercase", fontFamily: MONO },
+    heroBreakdown: { flexDirection: "row", gap: 16, flexWrap: "wrap", justifyContent: "center" },
+    heroBreakdownSecond: { marginTop: 8 },
+    heroStat: { flexDirection: "row", alignItems: "center", gap: 6 },
+    heroStatText: { fontSize: 12, color: t.textSecondary, letterSpacing: 0.5, fontFamily: MONO },
+    heroWatermark: { position: "absolute", right: -28, top: -18, opacity: 0.12 },
+    magiHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    magiTitle: { fontSize: 11, fontWeight: "700", color: t.secondaryAccent, letterSpacing: 3, fontFamily: MONO },
+    magiStatus: { fontSize: 11, fontWeight: "700", color: t.textSecondary, letterSpacing: 1.5, fontFamily: MONO },
+    magiCores: { flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 22, marginTop: 4 },
+    magiCore: { alignItems: "center", gap: 4 },
+    magiTriangle: { width: 0, height: 0, borderLeftWidth: 16, borderRightWidth: 16, borderBottomWidth: 26, borderLeftColor: "transparent", borderRightColor: "transparent" },
+    magiCoreLabel: { fontSize: 9, color: t.textMuted, letterSpacing: 1, fontFamily: MONO },
+    magiCoreCount: { fontSize: 14, fontWeight: "700", color: t.text, fontFamily: MONO },
+    nervTag: { fontSize: 10, color: t.secondaryAccent, letterSpacing: 2, fontFamily: MONO, fontWeight: "700" },
+    nervReadout: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, width: "100%", marginTop: 4 },
+    nervReadoutItem: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: t.border, backgroundColor: t.badgeBg, borderRadius: R_CHIP, paddingHorizontal: 10, paddingVertical: 5 },
+    nervReadoutLabel: { fontSize: 10, color: t.textMuted, letterSpacing: 1.5, fontFamily: MONO },
+    nervReadoutValue: { fontSize: 12, fontWeight: "700", color: t.text, fontFamily: MONO },
+    kittyHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    kittyBrand: { flexDirection: "row", alignItems: "center", gap: 6 },
+    kittyBow: { fontSize: 16, lineHeight: 18 },
+    kittyTitle: { fontSize: 12, fontWeight: "700", color: t.accent, letterSpacing: 1, fontFamily: MONO },
+    kittyStatus: { fontSize: 11, fontWeight: "700", color: t.textSecondary, letterSpacing: 1, fontFamily: MONO },
+    swFaction: { fontSize: 11, fontWeight: "700", color: t.accent, letterSpacing: 3, fontFamily: MONO },
+    swSaber: { height: 4, width: "100%", borderRadius: 0 },
+    swHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    swStatus: { fontSize: 11, fontWeight: "700", color: t.accent, letterSpacing: 1.5, fontFamily: MONO },
+    swSaberGlow: { width: "100%", marginBottom: 6, shadowColor: t.accent, shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
+    swReadout: { flexDirection: "row", gap: 14, justifyContent: "center", flexWrap: "wrap" },
+    swReadoutText: { fontSize: 10, color: t.textMuted, letterSpacing: 1.5, fontFamily: MONO },
+    heroAdd: { width: 44, height: 44, borderRadius: R_CHIP, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+    heroAddText: { fontSize: 24, fontWeight: "700", lineHeight: 26 },
+    heroActions: { flexDirection: "row", gap: 12, marginTop: 4, flexWrap: "wrap", justifyContent: "center" },
+    heroSecondary: { minHeight: 44, paddingHorizontal: 20, borderRadius: R_INNER, alignItems: "center", justifyContent: "center", backgroundColor: t.badgeBg, borderWidth: 1, borderColor: t.border },
+    heroSecondaryText: { fontSize: 12, fontWeight: "700", color: t.text, letterSpacing: 1, textTransform: "uppercase", fontFamily: MONO },
+    compactHero: { position: "absolute", top: 0, left: 0, right: 0, paddingTop: 54, paddingBottom: 10, paddingHorizontal: 20, backgroundColor: t.surface, borderBottomWidth: 1, borderBottomColor: t.secondaryAccent, zIndex: 10, shadowColor: t.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+    compactRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+    compactBrand: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
+    compactServerPill: { flexDirection: "row", alignItems: "center", gap: 6, maxWidth: 220, backgroundColor: t.badgeBg, borderRadius: R_CHIP, borderWidth: 1, borderColor: t.border, paddingHorizontal: 10, paddingVertical: 4 },
+    compactServerText: { fontSize: 11, color: t.textSecondary, fontWeight: "700", letterSpacing: 0.5, fontFamily: MONO },
+    compactDots: { flexDirection: "row", alignItems: "center", gap: 16 },
+    compactItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+    compactCount: { fontSize: 14, fontWeight: "700", color: t.text, fontFamily: MONO },
+
+    connectBlock: { marginTop: 16, gap: 12 },
+    hint: { fontSize: 13, color: t.textMuted, lineHeight: 18 },
+    manualRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+
+    gradientButton: { minHeight: 46, paddingHorizontal: 20, borderRadius: R_INNER, alignItems: "center", justifyContent: "center" },
+    gradientButtonText: { color: "#ffffff", fontWeight: "700", fontSize: 13, letterSpacing: 1, textTransform: "uppercase", fontFamily: MONO },
+    input: { flex: 1, minHeight: 46, borderWidth: 1, borderColor: t.inputBorder, borderRadius: R_INNER, paddingHorizontal: 14, backgroundColor: t.inputBg, color: t.text, fontSize: 14, fontFamily: MONO },
+    inputFull: { minHeight: 46, borderWidth: 1, borderColor: t.inputBorder, borderRadius: R_INNER, paddingHorizontal: 14, backgroundColor: t.inputBg, color: t.text, fontSize: 14, fontFamily: MONO },
+    fieldLabel: { fontSize: 12, fontWeight: "700", color: t.textSecondary, marginBottom: 8, letterSpacing: 1, textTransform: "uppercase", fontFamily: MONO },
+    fieldDescription: { fontSize: 12, color: t.textMuted, marginTop: 8, lineHeight: 17 },
+    settingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8, minHeight: 44 },
+    settingLabel: { fontSize: 13, color: t.text, fontFamily: MONO },
+    segment: { flexDirection: "row", backgroundColor: t.badgeBg, borderRadius: R_INNER, padding: 3, gap: 3, borderWidth: 1, borderColor: t.border },
+    segmentItem: { flex: 1 },
+    segmentSelected: { minHeight: 40, borderRadius: Math.max(0, R_INNER - 1), alignItems: "center", justifyContent: "center" },
+    segmentUnselected: { minHeight: 40, borderRadius: Math.max(0, R_INNER - 1), alignItems: "center", justifyContent: "center" },
+    segmentText: { fontSize: 12, fontWeight: "700", color: t.textSecondary, letterSpacing: 0.5, fontFamily: MONO },
+    segmentTextSelected: { fontSize: 12, fontWeight: "700", color: "#ffffff", letterSpacing: 0.5, fontFamily: MONO },
+    rowButton: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: R_INNER, paddingHorizontal: 16, minHeight: 52 },
+    rowButtonText: { fontSize: 13, color: t.text, fontWeight: "700", letterSpacing: 0.5, fontFamily: MONO },
+    chevron: { fontSize: 20, color: t.textMuted },
+    themeCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: R_INNER, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 10 },
+    themeCardSelected: { borderColor: t.secondaryAccent, borderWidth: 2 },
+    themeCardMain: { gap: 4, flexShrink: 1 },
+    themeCardText: { fontSize: 13, fontWeight: "700", color: t.text, letterSpacing: 0.5, fontFamily: MONO, textTransform: "uppercase" },
+    themeCardDesc: { fontSize: 11, color: t.textMuted, fontFamily: MONO, letterSpacing: 0.5 },
+    themeCardRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+    themeSwatches: { flexDirection: "row", gap: 6 },
+    themeSwatch: { width: 16, height: 16, borderRadius: R_CHIP, borderWidth: 1, borderColor: t.border },
+    themePreview: { width: 84, height: 48, borderRadius: R_INNER, borderWidth: 1, padding: 6 },
+    themePreviewCard: { flex: 1, borderRadius: Math.max(0, R_INNER - 1), borderWidth: 1, padding: 5, justifyContent: "space-between" },
+    themePreviewLine: { width: 22, height: 4, borderRadius: 0 },
+    themePreviewAccent: { width: 30, height: 10, borderRadius: R_CHIP },
+    about: { fontSize: 13, color: t.textSecondary, lineHeight: 19, marginBottom: 8 },
+
+    section: underlineSections
+      ? { fontSize: 11, fontWeight: "700", color: t.secondaryAccent, textTransform: "uppercase", letterSpacing: 3, marginTop: 24, marginBottom: 12, fontFamily: MONO, borderBottomWidth: 1, borderBottomColor: t.border, paddingBottom: 6 }
+      : { fontSize: 11, fontWeight: "700", color: t.secondaryAccent, textTransform: "uppercase", letterSpacing: 2.5, marginTop: 24, marginBottom: 12, fontFamily: MONO },
+    empty: { fontSize: 13, color: t.textMuted, fontFamily: MONO },
+    emptyCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: R, padding: 20, gap: 12, alignItems: "flex-start", shadowColor: t.shadow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
+    emptyHint: { fontSize: 13, color: t.textMuted, lineHeight: 19 },
+
+    cardGap: { marginBottom: 16 },
+    cardPad: { padding: 14, gap: 12 },
+    sessionHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+    sessionTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: t.text, letterSpacing: 0.3 },
+    sessionDir: { fontSize: 12, color: t.textMuted, marginTop: 4, fontFamily: MONO },
+    sessionPhase: { fontSize: 10, color: t.secondaryAccent, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: "700", fontFamily: MONO },
+    badges: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    badge: { fontSize: 11, color: t.badgeText, backgroundColor: t.badgeBg, borderRadius: R_CHIP, borderWidth: 1, borderColor: t.border, paddingHorizontal: 8, paddingVertical: 4, overflow: "hidden", letterSpacing: 0.5, fontFamily: MONO },
+    metaRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+    metaChip: { fontSize: 11, color: t.textSecondary, backgroundColor: t.badgeBg, borderRadius: R_CHIP, borderWidth: 1, borderColor: t.border, paddingHorizontal: 8, paddingVertical: 4, overflow: "hidden", letterSpacing: 0.5, fontFamily: MONO },
+    dirChip: { fontSize: 11, fontWeight: "700", color: t.accent, backgroundColor: t.badgeBg, borderRadius: R_CHIP, borderWidth: 1, borderColor: t.border, paddingHorizontal: 8, paddingVertical: 4, overflow: "hidden", letterSpacing: 0.5, fontFamily: MONO },
+    costChip: { fontSize: 11, fontWeight: "700", color: t.accent, backgroundColor: t.badgeBg, borderRadius: R_CHIP, borderWidth: 1, borderColor: t.border, paddingHorizontal: 8, paddingVertical: 4, overflow: "hidden", letterSpacing: 0.5, fontFamily: MONO },
+    stopButton: { borderRadius: R_CHIP, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: t.deny },
+    stopButtonText: { color: "#ffffff", fontWeight: "700", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", fontFamily: MONO },
+    closeButton: { fontSize: 22, color: t.textMuted, paddingHorizontal: 8, lineHeight: 22 },
+
+    sessionActivity: { fontSize: 13, color: t.text, marginTop: 8, lineHeight: 19 },
+    activityBlock: { borderRadius: R_INNER, padding: 10, backgroundColor: t.badgeBg, borderWidth: 1, borderColor: t.border, gap: 8 },
+    activityText: { fontSize: 13, color: t.text, lineHeight: 19 },
+    messageCard: { backgroundColor: t.surface, borderRadius: R_INNER, padding: 10, borderWidth: 1, borderColor: t.border, borderLeftWidth: 2, borderLeftColor: t.accent },
+    messageScroll: { maxHeight: 360 },
+    messageFull: { fontSize: 13, color: t.text, lineHeight: 20 },
+    moreLink: { fontSize: 11, fontWeight: "700", color: t.accent, marginBottom: 4, letterSpacing: 0.5, textTransform: "uppercase", fontFamily: MONO },
+
+    inlineGlow: { borderRadius: R_INNER, shadowOffset: { width: 0, height: 0 }, shadowRadius: 16, shadowOpacity: 0.5, elevation: 8 },
+    inlineGradient: { borderRadius: R_INNER, padding: 14 },
+    inlinePendingTitle: { fontSize: 15, fontWeight: "700", letterSpacing: 0.3 },
+    inlinePendingBody: { fontSize: 13, marginTop: 4, lineHeight: 19 },
+
+    actions: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12 },
+    actionInner: { minHeight: 44, paddingHorizontal: 18, borderRadius: R_INNER, alignItems: "center", justifyContent: "center" },
+    actionText: { color: "#ffffff", fontWeight: "700", fontSize: 12, letterSpacing: 0.5, fontFamily: MONO },
+    optionList: { marginTop: 8, gap: 8 },
+    optionRow: { gap: 4 },
+    optionButtonWrap: { alignSelf: "flex-start", maxWidth: "100%" },
+    optionDescription: { fontSize: 12, lineHeight: 17, opacity: 0.85 },
+    questionBlock: { marginTop: 16, gap: 4 },
+    freeformRow: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 12 },
+    freeformInput: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: R_INNER, paddingHorizontal: 14, paddingTop: 13, paddingBottom: 10, fontSize: 13, fontFamily: MONO, maxHeight: 96, textAlignVertical: "top" },
+
+    demoBanner: { marginTop: 16, borderRadius: R_INNER, padding: 14, backgroundColor: t.badgeBg, borderWidth: 1, borderColor: t.border },
+    demoBannerText: { fontSize: 12, color: t.textSecondary, lineHeight: 17 },
+    demoActions: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+    link: { color: t.accent, textDecorationLine: "underline" },
+
+    confirmBackdrop: { flex: 1, backgroundColor: t.scrim, alignItems: "center", justifyContent: "center", padding: 24 },
+    confirmCard: { width: "100%", maxWidth: 440, borderRadius: R, borderWidth: 1, borderTopWidth: 2, borderColor: t.border, borderTopColor: t.accent, padding: 18, gap: 12, shadowColor: t.shadow, shadowOpacity: 1, shadowRadius: 24, shadowOffset: { width: 0, height: 12 } },
+    confirmTitle: { fontSize: 15, fontWeight: "700", color: t.text, letterSpacing: 1, textTransform: "uppercase", fontFamily: MONO },
+    confirmMessage: { fontSize: 13, color: t.textSecondary, lineHeight: 19 },
+    confirmActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 },
+    switcherScroll: { maxHeight: 360 },
+    switcherItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: t.border },
+    switcherItemText: { fontSize: 13, color: t.text, fontFamily: MONO },
+    switcherCheck: { fontSize: 13, color: t.accent, fontWeight: "700" },
+
+    cardTitle: { fontSize: 15, fontWeight: "700", color: t.text, letterSpacing: 0.3 },
+    cardBody: { fontSize: 13, color: t.textSecondary, marginTop: 4, lineHeight: 19 },
+
+    sparkleWrap: { alignItems: "center", justifyContent: "center", width: 28, height: 28 },
+    sparkleMain: { color: "#ffffff", fontSize: 22, lineHeight: 24, marginTop: 2 },
+    sparkleMini: { position: "absolute", top: -1, right: -2, color: "rgba(255,255,255,0.95)", fontSize: 11, lineHeight: 12 },
+  })
+}
+
+// Evangelion: angular panels with corner ticks - no rounding at all.
+const createNervStyles = (t: Theme) => createHudStyles(t, 0, 0, 0, false)
+// Star Wars: rounded HUD panels, underlined section headers, a lightsaber rail.
+const createStarWarsStyles = (t: Theme) => createHudStyles(t, 12, 10, 8, true)

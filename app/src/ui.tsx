@@ -106,6 +106,8 @@ export function GradientSurface({
   shimmer = false,
   shimmerLoop = false,
   animatedBorder = false,
+  nerv = false,
+  rail = false,
   style,
   innerStyle,
   children,
@@ -117,6 +119,8 @@ export function GradientSurface({
   shimmer?: boolean
   shimmerLoop?: boolean
   animatedBorder?: boolean
+  nerv?: boolean
+  rail?: boolean
   style?: StyleProp<ViewStyle>
   innerStyle?: StyleProp<ViewStyle>
   children: ReactNode
@@ -187,6 +191,20 @@ export function GradientSurface({
       }
     : null
 
+  // Angular panels (NERV) clamp the radius and add corner ticks; Star Wars rounds the
+  // panel and adds a left lightsaber rail.
+  const r = nerv ? 0 : rail ? Math.min(radius, 16) : radius
+  const tickColor = glow ?? colors[0]
+  const ticks = nerv ? (
+    <>
+      <View pointerEvents="none" style={[styles.tick, { top: -1, left: -1, borderTopWidth: 2, borderLeftWidth: 2, borderColor: tickColor }]} />
+      <View pointerEvents="none" style={[styles.tick, { top: -1, right: -1, borderTopWidth: 2, borderRightWidth: 2, borderColor: tickColor }]} />
+      <View pointerEvents="none" style={[styles.tick, { bottom: -1, left: -1, borderBottomWidth: 2, borderLeftWidth: 2, borderColor: tickColor }]} />
+      <View pointerEvents="none" style={[styles.tick, { bottom: -1, right: -1, borderBottomWidth: 2, borderRightWidth: 2, borderColor: tickColor }]} />
+    </>
+  ) : null
+  const railEl = rail ? <View pointerEvents="none" style={[styles.rail, { backgroundColor: tickColor }]} /> : null
+
   const sheen = shimmer ? (
     <Animated.View
       pointerEvents="none"
@@ -210,8 +228,8 @@ export function GradientSurface({
 
   if (animatedBorder) {
     return (
-      <Animated.View style={[{ borderRadius: radius }, glowStyle, style]}>
-        <View style={[styles.clip, { borderRadius: radius }]}>
+      <Animated.View style={[{ borderRadius: r }, glowStyle, style]}>
+        <View style={[styles.clip, { borderRadius: r }]}>
           <Animated.View
             pointerEvents="none"
             style={[
@@ -221,28 +239,32 @@ export function GradientSurface({
           >
             <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
           </Animated.View>
-          <View style={[styles.inner, { borderRadius: radius - 1, margin: 1 }, innerStyle]}>
+          <View style={[styles.inner, { borderRadius: Math.max(0, r - 1), margin: 1 }, innerStyle]}>
             {sheen}
             {children}
+            {railEl}
           </View>
         </View>
+        {ticks}
       </Animated.View>
     )
   }
 
   return (
-    <Animated.View style={[{ borderRadius: radius }, glowStyle, style]}>
+    <Animated.View style={[{ borderRadius: r }, glowStyle, style]}>
       <LinearGradient
         colors={colors}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ borderRadius: radius, padding: 1 }}
+        style={{ borderRadius: r, padding: 1 }}
       >
-        <View style={[styles.inner, { borderRadius: radius - 1 }, innerStyle]}>
+        <View style={[styles.inner, { borderRadius: Math.max(0, r - 1) }, innerStyle]}>
           {sheen}
           {children}
+          {railEl}
         </View>
       </LinearGradient>
+      {ticks}
     </Animated.View>
   )
 }
@@ -428,4 +450,54 @@ const styles = StyleSheet.create({
   inner: { overflow: "hidden" },
   clip: { overflow: "hidden" },
   rotor: { position: "absolute", top: -1200, left: -1200, right: -1200, bottom: -1200 },
+  tick: { position: "absolute", width: 12, height: 12 },
+  rail: { position: "absolute", left: 0, top: 8, bottom: 8, width: 3, borderRadius: 2 },
 })
+
+/** A thin NERV hazard stripe band (repeating diagonal blocks). */
+export function HazardBar({ color = "#f5a524", contrast = "rgba(0,0,0,0.85)", height = 5 }: { color?: string; contrast?: string; height?: number }) {
+  const dark = contrast
+  const colors: string[] = []
+  const locations: number[] = []
+  const stripes = 16
+  for (let i = 0; i < stripes; i += 1) {
+    const start = i / stripes
+    const mid = (i + 0.5) / stripes
+    const end = (i + 1) / stripes
+    colors.push(color, color, dark, dark)
+    locations.push(start, mid - 0.001, mid, end - 0.001)
+  }
+  return (
+    <LinearGradient
+      colors={colors as [string, string, ...string[]]}
+      locations={locations as [number, number, ...number[]]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={{ height, width: "100%" }}
+    />
+  )
+}
+
+/** A subtle horizontal scanline texture (CRT / HUD). Fills its positioned parent. */
+export function Scanlines({ color = "rgba(127,127,127,0.12)", count = 22, thickness = 1 }: { color?: string; count?: number; thickness?: number }) {
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { justifyContent: "space-between", overflow: "hidden" }]}>
+      {Array.from({ length: count }, (_, i) => (
+        <View key={i} style={{ height: thickness, backgroundColor: color }} />
+      ))}
+    </View>
+  )
+}
+
+const TELEMETRY = [0.35, 0.6, 0.45, 0.9, 0.5, 0.75, 0.4, 0.68, 0.55, 0.85, 0.3, 0.7, 0.5, 0.95, 0.42, 0.62, 0.38, 0.8, 0.52, 0.72, 0.33, 0.88, 0.48, 0.66]
+
+/** A decorative HUD waveform / equalizer strip. */
+export function TelemetryBars({ color, height = 14, count = 26 }: { color: string; height?: number; count?: number }) {
+  return (
+    <View pointerEvents="none" style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, width: "100%", height }}>
+      {Array.from({ length: count }, (_, i) => (
+        <View key={i} style={{ flex: 1, height: Math.max(2, height * TELEMETRY[i % TELEMETRY.length]), backgroundColor: color }} />
+      ))}
+    </View>
+  )
+}

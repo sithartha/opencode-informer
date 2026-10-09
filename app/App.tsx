@@ -5,21 +5,17 @@ import { LinearGradient } from "expo-linear-gradient"
 import { useBridge } from "./src/useBridge"
 import type { PendingRequest, Session } from "./src/events"
 import { aggregate } from "./src/aggregate"
-import { resolveTheme, type ThemeMode } from "./src/theme"
+import { resolveTheme, SKINS, skinDef } from "./src/theme"
 import { createStyles } from "./src/styles"
 import { joinHostPort } from "./src/manualConnect"
-import { BrandMark, CompactHero, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
+import { CompactHero, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
+import { ThemeMark } from "./src/themeMark"
 import { DemoScreen } from "./src/DemoScreen"
 import { FadeIn, GlowDot, PressableScale } from "./src/ui"
 
 const APP_DESCRIPTION =
   "OpenCode Informer mirrors your OpenCode agents to this phone: watch their activity, get notified when one needs you, and approve or answer right from the Lock Screen — over your local WiFi and Bluetooth, with no server."
 
-const THEME_OPTIONS: { mode: ThemeMode; label: string }[] = [
-  { mode: "light", label: "Light" },
-  { mode: "dark", label: "Dark" },
-  { mode: "system", label: "System" },
-]
 
 export default function App() {
   const {
@@ -40,8 +36,10 @@ export default function App() {
     setLiveActivityOn,
     deviceName,
     setDeviceName,
-    themeMode,
-    setThemeMode,
+    skin,
+    themeOption,
+    setSkin,
+    setThemeOption,
     pairingCodeRequest,
     pairingCodeError,
     submitPairingCode,
@@ -50,7 +48,7 @@ export default function App() {
   } = useBridge()
 
   const systemScheme = useColorScheme()
-  const theme = resolveTheme(themeMode, systemScheme)
+  const theme = resolveTheme(skin, themeOption, systemScheme)
   const styles = useMemo(() => createStyles(theme), [theme])
 
   const [showManual, setShowManual] = useState(false)
@@ -168,8 +166,8 @@ export default function App() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScroll={(event) => { const y = event.nativeEvent.contentOffset.y; offsetRef.current = y; heroScrollY.setValue(y) }} scrollEventThrottle={16}>
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
-            <BrandMark theme={theme} />
-            <Text style={styles.title}>OpenCode Informer</Text>
+            <ThemeMark theme={theme} />
+            <Text style={styles.title}>OI</Text>
           </View>
           <PressableScale onPress={() => setShowSettings(true)} accessibilityLabel="Settings">
             <Text style={styles.settingsLink}>Settings</Text>
@@ -270,25 +268,68 @@ export default function App() {
 
             <Text style={styles.section}>Appearance</Text>
             <Text style={styles.fieldLabel}>Theme</Text>
+            {SKINS.map((entry) => {
+              // Preview follows the current light/dark: skins with a System option resolve it,
+              // otherwise pick the variant that matches the current scheme.
+              const preview = entry.options.some((o) => o.id === "system")
+                ? entry.resolve("system", theme.dark ? "dark" : "light")
+                : entry.resolve((entry.options.find((o) => entry.resolve(o.id, systemScheme).dark === theme.dark) ?? entry.options[0]).id, systemScheme)
+              const previewStyles = createStyles(preview)
+              const selected = skin === entry.id
+              return (
+                <TouchableOpacity
+                  key={entry.id}
+                  style={[styles.themeCard, selected ? styles.themeCardSelected : null]}
+                  onPress={() => void setSkin(entry.id)}
+                  activeOpacity={0.85}
+                  accessibilityLabel={`Theme ${entry.name}`}
+                >
+                  <View style={styles.themeCardMain}>
+                    <Text style={styles.themeCardText}>{entry.name}</Text>
+                    <Text style={styles.themeCardDesc}>{entry.description}</Text>
+                  </View>
+                  <View style={styles.themeCardRight}>
+                    <LinearGradient
+                      colors={preview.bgGradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[previewStyles.themePreview, { borderColor: preview.border }]}
+                    >
+                      <View style={[previewStyles.themePreviewCard, { backgroundColor: preview.surface, borderColor: preview.border }]}>
+                        <View style={[previewStyles.themePreviewLine, { backgroundColor: preview.accent }]} />
+                        <View style={[previewStyles.themePreviewLine, { width: 16, backgroundColor: preview.textSecondary }]} />
+                        <View style={[previewStyles.themePreviewAccent, { backgroundColor: preview.accent }]} />
+                      </View>
+                    </LinearGradient>
+                    {selected ? <Text style={styles.switcherCheck}>✓</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              )
+            })}
+            <Text style={styles.fieldLabel}>{skin === "evangelion" ? "Unit" : "Appearance"}</Text>
             <View style={styles.segment}>
-              {THEME_OPTIONS.map((option) => {
-                const selected = themeMode === option.mode
+              {skinDef(skin).options.map((option) => {
+                const selected = themeOption === option.id
                 return (
-                  <TouchableOpacity key={option.mode} style={styles.segmentItem} onPress={() => void setThemeMode(option.mode)} activeOpacity={0.8}>
+                  <TouchableOpacity key={option.id} style={styles.segmentItem} onPress={() => void setThemeOption(option.id)} activeOpacity={0.8}>
                     {selected ? (
                       <LinearGradient colors={theme.accentGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.segmentSelected}>
-                        <Text style={styles.segmentTextSelected}>{option.label}</Text>
+                        <Text style={styles.segmentTextSelected}>{option.name}</Text>
                       </LinearGradient>
                     ) : (
                       <View style={styles.segmentUnselected}>
-                        <Text style={styles.segmentText}>{option.label}</Text>
+                        <Text style={styles.segmentText}>{option.name}</Text>
                       </View>
                     )}
                   </TouchableOpacity>
                 )
               })}
             </View>
-            <Text style={styles.fieldDescription}>System follows your iPhone's Light/Dark setting.</Text>
+            <Text style={styles.fieldDescription}>
+              {skin === "evangelion"
+                ? "NERV interface using one Evangelion unit's colors."
+                : "Light, Dark, or follow your iPhone's setting."}
+            </Text>
 
             <Text style={styles.section}>Connection</Text>
             <View style={styles.settingRow}>

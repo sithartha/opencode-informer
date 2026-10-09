@@ -14,7 +14,7 @@ import {
   getLastHost,
   getLastPort,
   getLiveActivityEnabled,
-  getThemeMode,
+  getTheme,
   readSecure,
   secureTokenStore,
   setDeviceName as persistDeviceName,
@@ -22,10 +22,10 @@ import {
   setLastPort,
   setLiveActivityEnabled,
   setMacName,
-  setThemeMode as persistThemeMode,
+  setTheme as persistTheme,
   writeSecure,
 } from "./secureTokenStore"
-import type { ThemeMode } from "./theme"
+import { DEFAULT_OPTION, DEFAULT_SKIN, defaultOptionFor, type SkinId, type ThemeOption } from "./theme"
 import { reconnectWithToken } from "./reconnect"
 import { actionToResolution, isAttentionEvent, notificationFor, notificationForDoorbell } from "./notifications"
 import { configureNotifications, dismissNotification, presentNotification, registerQuestionCategory } from "./pushNotifications"
@@ -53,7 +53,8 @@ export function useBridge() {
   const [paired, setPaired] = useState(false)
   const [liveActivityEnabled, setLiveActivityEnabledState] = useState(true)
   const [deviceName, setDeviceNameState] = useState(Constants.deviceName || "iPhone")
-  const [themeMode, setThemeModeState] = useState<ThemeMode>("system")
+  const [skin, setSkinState] = useState<SkinId>(DEFAULT_SKIN)
+  const [themeOption, setThemeOptionState] = useState<ThemeOption>(DEFAULT_OPTION)
   const [pairingCodeRequest, setPairingCodeRequest] = useState<string | null>(null)
   const [pairingCodeError, setPairingCodeError] = useState<string | null>(null)
   const [diagnostic, setDiagnostic] = useState<string | null>(null)
@@ -482,10 +483,20 @@ export function useBridge() {
     await persistDeviceName(name)
   }, [])
 
-  const setThemeMode = useCallback(async (mode: ThemeMode) => {
-    setThemeModeState(mode)
-    await persistThemeMode(mode)
+  const setSkin = useCallback(async (next: SkinId) => {
+    const option = defaultOptionFor(next)
+    setSkinState(next)
+    setThemeOptionState(option)
+    await persistTheme(next, option)
   }, [])
+
+  const setThemeOption = useCallback(
+    async (option: ThemeOption) => {
+      setThemeOptionState(option)
+      await persistTheme(skin, option)
+    },
+    [skin],
+  )
 
   const setLiveActivityOn = useCallback(async (enabled: boolean) => {
     setLiveActivityEnabledState(enabled)
@@ -737,8 +748,9 @@ export function useBridge() {
       }
     })
 
-    void getThemeMode().then((mode) => {
-      if (mode === "light" || mode === "dark" || mode === "system") setThemeModeState(mode)
+    void getTheme().then(({ skin: loadedSkin, option }) => {
+      setSkinState(loadedSkin)
+      setThemeOptionState(option)
     })
 
     return () => {
@@ -748,5 +760,5 @@ export function useBridge() {
     }
   }, [connect, connectManual, connectRemembered, resolve, refresh])
 
-  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, themeMode, setThemeMode, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
+  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, skin, themeOption, setSkin, setThemeOption, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
 }

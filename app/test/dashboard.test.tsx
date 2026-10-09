@@ -3,9 +3,11 @@ import { Linking } from "react-native"
 import { BrandMark, CompactHero, ConfirmModal, GradientButton, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, SessionCard, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
 import { createStyles } from "../src/styles"
-import { darkTheme, lightTheme } from "../src/theme"
+import { resolveTheme } from "../src/theme"
 import type { PendingRequest, Session } from "../src/events"
 
+const lightTheme = resolveTheme("default", "light")
+const darkTheme = resolveTheme("default", "dark")
 const styles = createStyles(lightTheme)
 
 function session(overrides: Partial<Session> = {}): Session {

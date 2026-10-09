@@ -7,7 +7,8 @@ import type { Aggregate } from "./aggregate"
 import type { Theme } from "./theme"
 import { dirName } from "./paths"
 import { formatCost } from "./format"
-import { FadeIn, GlowDot, GradientSurface, PressableScale } from "./ui"
+import { FadeIn, GlowDot, GradientSurface, HazardBar, PressableScale, Scanlines, TelemetryBars } from "./ui"
+import { ThemeMark } from "./themeMark"
 import type { Styles } from "./styles"
 
 export const PHASE_COLORS: Record<string, string> = {
@@ -44,6 +45,8 @@ export function InlineInput({
   styles,
   theme,
   onFieldFocus,
+  accent = false,
+  textColor,
 }: {
   placeholder: string
   submitLabel?: string
@@ -51,6 +54,8 @@ export function InlineInput({
   styles: Styles
   theme: Theme
   onFieldFocus?: (y: number, h: number) => void
+  accent?: boolean
+  textColor?: string
 }) {
   const [text, setText] = useState("")
   const inputRef = useRef<TextInput>(null)
@@ -60,11 +65,17 @@ export function InlineInput({
     onSubmit(value)
     setText("")
   }
+  const color = accent ? textColor ?? theme.questionText : theme.text
   return (
     <View style={styles.freeformRow}>
       <TextInput
         ref={inputRef}
-        style={styles.freeformInput}
+        style={[
+          styles.freeformInput,
+          accent
+            ? { color, backgroundColor: "rgba(127,127,127,0.14)", borderColor: "rgba(127,127,127,0.35)" }
+            : { color, backgroundColor: theme.inputBg, borderColor: theme.inputBorder },
+        ]}
         value={text}
         onChangeText={setText}
         multiline
@@ -226,6 +237,8 @@ export function MultiQuestionForm({
                 styles={styles}
                 theme={theme}
                 onFieldFocus={onFieldFocus}
+                accent
+                textColor={theme.questionText}
               />
             ) : null}
           </View>
@@ -304,6 +317,8 @@ export function PendingActions({
           styles={styles}
           theme={theme}
           onFieldFocus={onFieldFocus}
+          accent
+          textColor={theme.questionText}
         />
       ) : null}
     </>
@@ -328,6 +343,16 @@ export function HeroCard({
   const idle = agg.total === 0
   const border = agg.waitingApproval > 0 ? theme.permissionBorder : agg.waitingAnswer > 0 ? theme.questionBorder : theme.cardBorder
   const glow = agg.waitingApproval > 0 ? theme.permissionGlow : agg.waitingAnswer > 0 ? theme.questionGlow : theme.glow
+  const nerv = theme.skin === "evangelion"
+  const isStarWars = theme.skin === "starwars"
+  const isSanrio = theme.skin === "sanrio"
+  const unit = theme.variant === "unit00" ? "00" : theme.variant === "unit02" ? "02" : "01"
+  // MAGI cores: the three supercomputer brains mapped to the attention states.
+  const cores = [
+    { label: "MELCHIOR", color: PHASE_COLORS.running, count: agg.running, active: agg.running > 0 },
+    { label: "BALTHASAR", color: PHASE_COLORS["waiting-permission"], count: agg.waitingApproval, active: agg.waitingApproval > 0 },
+    { label: "CASPER", color: PHASE_COLORS["waiting-answer"], count: agg.waitingAnswer, active: agg.waitingAnswer > 0 },
+  ]
   return (
     <GradientSurface
       colors={border}
@@ -336,10 +361,84 @@ export function HeroCard({
       shimmer={hasAttention}
       shimmerLoop={hasAttention}
       animatedBorder={hasAttention}
-      radius={22}
+      radius={isSanrio ? 30 : 22}
+      nerv={nerv}
+      rail={isStarWars}
       innerStyle={{ backgroundColor: theme.surface }}
     >
+      {nerv ? (
+        <HazardBar
+          color={hasAttention ? (agg.waitingApproval > 0 ? "#f5a524" : theme.accent) : theme.accent}
+          contrast={theme.dark ? "rgba(0,0,0,0.85)" : "#ffffff"}
+        />
+      ) : null}
+      {nerv ? (
+        <Scanlines color={theme.dark ? "rgba(255,255,255,0.05)" : "rgba(10,25,50,0.05)"} count={26} />
+      ) : null}
+      {isSanrio ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={[`${theme.accent}22`, `${theme.accent}00`]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.kittyHeroGlow}
+        />
+      ) : null}
+      <View pointerEvents="none" style={styles.heroWatermark}>
+        <ThemeMark theme={theme} size={168} />
+      </View>
       <View style={styles.heroInner}>
+        {isStarWars ? (
+          <>
+            <View style={styles.swHeader}>
+              <Text style={styles.swFaction}>{theme.dark ? "SITH ORDER" : "JEDI ORDER"}</Text>
+              <Text style={styles.swStatus}>{hasAttention ? "◆ ALERT" : idle ? "◇ IDLE" : "◆ READY"}</Text>
+            </View>
+            <View style={styles.swSaberGlow}>
+              <LinearGradient
+                colors={[theme.accent, "#ffffff", theme.accent]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.swSaber}
+              />
+            </View>
+          </>
+        ) : null}
+        {nerv ? (
+          <>
+            <View style={styles.magiHeader}>
+              <Text style={styles.magiTitle}>MAGI SYSTEM</Text>
+              <Text style={styles.nervTag}>EVA-{unit}</Text>
+              <Text style={styles.magiStatus}>{hasAttention ? "ATTENTION" : idle ? "STANDBY" : "NOMINAL"}</Text>
+            </View>
+            <View style={styles.magiCores}>
+              {cores.map((core) => (
+                <View key={core.label} style={styles.magiCore}>
+                  <View style={[styles.magiTriangle, { borderBottomColor: core.color, opacity: core.active ? 1 : 0.28 }]} />
+                  <Text style={styles.magiCoreLabel}>{core.label}</Text>
+                  <Text style={styles.magiCoreCount}>{core.count}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+        {isSanrio ? (
+          <>
+            <View style={styles.kittyHeader}>
+              <View style={styles.kittyBrand}>
+                <Text style={styles.kittyBow}>{theme.dark ? "🐾" : "🎀"}</Text>
+                <Text style={styles.kittyTitle}>{theme.dark ? "CHOCOCAT" : "HELLO KITTY"}</Text>
+              </View>
+              <Text style={styles.kittyStatus}>{hasAttention ? "NEEDS YOU" : idle ? "QUIET" : "ALL GOOD"}</Text>
+            </View>
+            <LinearGradient
+              colors={[`${theme.accent}00`, theme.accent, `${theme.accent}00`]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.kittyDivider}
+            />
+          </>
+        ) : null}
         {hasAttention ? (
           <>
             <Text style={styles.heroCount}>{needsYou}</Text>
@@ -351,28 +450,95 @@ export function HeroCard({
             <Text style={styles.heroLabel}>{idle ? "Nothing is running" : "Nothing needs you"}</Text>
           </>
         )}
-        <View style={styles.heroBreakdown}>
-          <View style={styles.heroStat}>
-            <GlowDot color={PHASE_COLORS.running} size={7} pulse={agg.running > 0} />
-            <Text style={styles.heroStatText}>{agg.running} working</Text>
-          </View>
-          <View style={styles.heroStat}>
-            <GlowDot color={PHASE_COLORS.completed} size={7} />
-            <Text style={styles.heroStatText}>{agg.stopped} inactive</Text>
-          </View>
-        </View>
-        {hasAttention ? (
-          <View style={[styles.heroBreakdown, styles.heroBreakdownSecond]}>
-            <View style={styles.heroStat}>
-              <GlowDot color={PHASE_COLORS["waiting-permission"]} size={7} pulse={agg.waitingApproval > 0} />
-              <Text style={styles.heroStatText}>{agg.waitingApproval} permission</Text>
-            </View>
-            <View style={styles.heroStat}>
-              <GlowDot color={PHASE_COLORS["waiting-answer"]} size={7} pulse={agg.waitingAnswer > 0} />
-              <Text style={styles.heroStatText}>{agg.waitingAnswer} question</Text>
-            </View>
+        {isStarWars ? (
+          <View style={styles.swReadout}>
+            <Text style={styles.swReadoutText}>WRK {agg.running}</Text>
+            <Text style={styles.swReadoutText}>PRM {agg.waitingApproval}</Text>
+            <Text style={styles.swReadoutText}>QST {agg.waitingAnswer}</Text>
+            <Text style={styles.swReadoutText}>INA {agg.stopped}</Text>
           </View>
         ) : null}
+        {nerv ? (
+          <>
+            <View style={{ width: "100%", marginTop: 2 }}>
+              <TelemetryBars color={theme.accent} height={14} count={26} />
+            </View>
+            <View style={styles.nervReadout}>
+            <View style={styles.nervReadoutItem}>
+              <Text style={styles.nervReadoutLabel}>RUN</Text>
+              <Text style={[styles.nervReadoutValue, { color: agg.running > 0 ? theme.accent : theme.textMuted }]}>{agg.running}</Text>
+            </View>
+            <View style={styles.nervReadoutItem}>
+              <Text style={styles.nervReadoutLabel}>PRM</Text>
+              <Text style={[styles.nervReadoutValue, { color: agg.waitingApproval > 0 ? theme.accent : theme.textMuted }]}>{agg.waitingApproval}</Text>
+            </View>
+            <View style={styles.nervReadoutItem}>
+              <Text style={styles.nervReadoutLabel}>QST</Text>
+              <Text style={[styles.nervReadoutValue, { color: agg.waitingAnswer > 0 ? theme.accent : theme.textMuted }]}>{agg.waitingAnswer}</Text>
+            </View>
+            <View style={styles.nervReadoutItem}>
+              <Text style={styles.nervReadoutLabel}>INA</Text>
+              <Text style={[styles.nervReadoutValue, { color: theme.textMuted }]}>{agg.stopped}</Text>
+            </View>
+            <View style={styles.nervReadoutItem}>
+              <Text style={styles.nervReadoutLabel}>TOT</Text>
+              <Text style={[styles.nervReadoutValue, { color: theme.textMuted }]}>{agg.total}</Text>
+            </View>
+            </View>
+          </>
+        ) : isSanrio ? (
+          <View style={styles.kittyChips}>
+            <View style={styles.kittyChip}>
+              <Text style={styles.kittyChipIcon}>🐾</Text>
+              <Text style={styles.kittyChipValue}>{agg.running}</Text>
+              <Text style={styles.kittyChipLabel}>working</Text>
+            </View>
+            <View style={styles.kittyChip}>
+              <Text style={styles.kittyChipIcon}>💤</Text>
+              <Text style={styles.kittyChipValue}>{agg.stopped}</Text>
+              <Text style={styles.kittyChipLabel}>inactive</Text>
+            </View>
+            {agg.waitingApproval > 0 ? (
+              <View style={styles.kittyChip}>
+                <Text style={styles.kittyChipIcon}>🔔</Text>
+                <Text style={styles.kittyChipValue}>{agg.waitingApproval}</Text>
+                <Text style={styles.kittyChipLabel}>permission</Text>
+              </View>
+            ) : null}
+            {agg.waitingAnswer > 0 ? (
+              <View style={styles.kittyChip}>
+                <Text style={styles.kittyChipIcon}>💬</Text>
+                <Text style={styles.kittyChipValue}>{agg.waitingAnswer}</Text>
+                <Text style={styles.kittyChipLabel}>question</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : isStarWars ? null : (
+          <>
+            <View style={styles.heroBreakdown}>
+              <View style={styles.heroStat}>
+                <GlowDot color={PHASE_COLORS.running} size={7} pulse={agg.running > 0} />
+                <Text style={styles.heroStatText}>{agg.running} working</Text>
+              </View>
+              <View style={styles.heroStat}>
+                <GlowDot color={PHASE_COLORS.completed} size={7} />
+                <Text style={styles.heroStatText}>{agg.stopped} inactive</Text>
+              </View>
+            </View>
+            {hasAttention ? (
+              <View style={[styles.heroBreakdown, styles.heroBreakdownSecond]}>
+                <View style={styles.heroStat}>
+                  <GlowDot color={PHASE_COLORS["waiting-permission"]} size={7} pulse={agg.waitingApproval > 0} />
+                  <Text style={styles.heroStatText}>{agg.waitingApproval} permission</Text>
+                </View>
+                <View style={styles.heroStat}>
+                  <GlowDot color={PHASE_COLORS["waiting-answer"]} size={7} pulse={agg.waitingAnswer > 0} />
+                  <Text style={styles.heroStatText}>{agg.waitingAnswer} question</Text>
+                </View>
+              </View>
+            ) : null}
+          </>
+        )}
         {(hasAttention && onReviewWaiting) || onStart ? (
           <View style={styles.heroActions}>
             {hasAttention && onReviewWaiting ? (
@@ -393,6 +559,13 @@ export function HeroCard({
           </View>
         ) : null}
       </View>
+      {nerv ? (
+        <HazardBar
+          color={hasAttention ? (agg.waitingApproval > 0 ? "#f5a524" : theme.accent) : theme.accent}
+          contrast={theme.dark ? "rgba(0,0,0,0.85)" : "#ffffff"}
+          height={3}
+        />
+      ) : null}
     </GradientSurface>
   )
 }
@@ -419,7 +592,7 @@ export function CompactHero({
   return (
     <View style={styles.compactRow}>
       <View style={styles.compactBrand}>
-        <BrandMark theme={theme} />
+        <ThemeMark theme={theme} size={26} />
         {server ? (
           <View style={styles.compactServerPill}>
             <GlowDot color={connected ? theme.allow : theme.deny} size={6} pulse={!connected} />
@@ -786,6 +959,8 @@ export function SessionCard({
       shimmer={Boolean(request)}
       animatedBorder={Boolean(request)}
       radius={18}
+      nerv={theme.skin === "evangelion"}
+      rail={theme.skin === "starwars"}
       innerStyle={{ backgroundColor: theme.surface }}
     >
       <View style={styles.cardPad}>
@@ -868,7 +1043,7 @@ export function NeedsAttentionCard({
   const bgGradient = isQuestion ? theme.questionBgGradient : theme.permissionBgGradient
   const text = isQuestion ? theme.questionText : theme.permissionText
   return (
-    <GradientSurface colors={border} glow={glow} pulse shimmer animatedBorder radius={18} innerStyle={{ backgroundColor: theme.surface }}>
+    <GradientSurface colors={border} glow={glow} pulse shimmer animatedBorder radius={18} nerv={theme.skin === "evangelion"} rail={theme.skin === "starwars"} innerStyle={{ backgroundColor: theme.surface }}>
       <View style={styles.cardPad}>
         <View style={[styles.inlineGlow, { marginTop: 0, shadowColor: glow }]}>
           <LinearGradient colors={bgGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inlineGradient}>

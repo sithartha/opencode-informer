@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store"
-import { DEVICE_NAME_KEY, LAST_HOST_KEY, LAST_PORT_KEY, LIVE_ACTIVITY_KEY, MAC_NAME_KEY, THEME_MODE_KEY, TOKEN_KEY, type TokenStore } from "./tokenStore"
+import { DEFAULT_OPTION, DEFAULT_SKIN, isSkinId, migrateStoredTheme, type SkinId, type ThemeOption } from "./theme"
+import { DEVICE_NAME_KEY, LAST_HOST_KEY, LAST_PORT_KEY, LIVE_ACTIVITY_KEY, MAC_NAME_KEY, SKIN_KEY, THEME_MODE_KEY, THEME_OPTION_KEY, TOKEN_KEY, type TokenStore } from "./tokenStore"
 
 // SecureStore needs a keychain entitlement. Unsigned builds (e.g. a simulator build with
 // signing disabled) cannot access the keychain, so fall back to an in-memory store to keep
@@ -66,12 +67,22 @@ export function setDeviceName(name: string): Promise<void> {
   return write(DEVICE_NAME_KEY, name)
 }
 
-export function getThemeMode(): Promise<string | null> {
-  return read(THEME_MODE_KEY)
+export async function getTheme(): Promise<{ skin: SkinId; option: ThemeOption }> {
+  const skin = await read(SKIN_KEY)
+  const option = await read(THEME_OPTION_KEY)
+  if (skin != null || option != null) {
+    return {
+      skin: isSkinId(skin) ? skin : DEFAULT_SKIN,
+      option: (option as ThemeOption | null) ?? DEFAULT_OPTION,
+    }
+  }
+  // Migrate the legacy single theme value.
+  const legacy = await read(THEME_MODE_KEY)
+  return migrateStoredTheme(legacy) ?? { skin: DEFAULT_SKIN, option: DEFAULT_OPTION }
 }
 
-export function setThemeMode(mode: string): Promise<void> {
-  return write(THEME_MODE_KEY, mode)
+export async function setTheme(skin: SkinId, option: ThemeOption): Promise<void> {
+  await Promise.all([write(SKIN_KEY, skin), write(THEME_OPTION_KEY, option)])
 }
 
 /** The last bridge host/port this phone reached, for connecting again directly. */
