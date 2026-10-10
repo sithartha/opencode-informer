@@ -27,9 +27,9 @@
 
 ## 4. Build and TestFlight
 
-- [ ] 4.1 Build the iOS app: `cd app && npx eas-cli build -p ios --profile production
+- [x] 4.1 Build the iOS app: `cd app && npx eas-cli build -p ios --profile production
   --non-interactive`. Verify: the build finishes and produces an `.ipa`.
-- [ ] 4.2 Submit to App Store Connect: `cd app && npx eas-cli submit -p ios --latest`. If EAS asks
+- [x] 4.2 Submit to App Store Connect: `cd app && npx eas-cli submit -p ios --latest`. If EAS asks
   for the App Store Connect credential, use the app-specific password from
   `~/.config/opencode/asc-app-password` (the project's convention). Verify: the submission is
   accepted by App Store Connect.
@@ -38,10 +38,10 @@
 
 ## 5. Other components
 
-- [ ] 5.1 Cross-platform helper: run the `helper` workflow (dispatch on `main`), download the
+- [x] 5.1 Cross-platform helper: run the `helper` workflow (dispatch on `main`), download the
   Linux/Windows/macOS artifacts, and create the `helper-v0.5.0` GitHub Release with the binaries
   (unsigned). Verify: the release exists with the three artifacts.
-- [ ] 5.2 macOS helper: bump `mac-helper/Resources/Info.plist` to 0.4.3, run
+- [x] 5.2 macOS helper: bump `mac-helper/Resources/Info.plist` to 0.4.3, run
   `mac-helper/scripts/release-helper.sh` (Developer ID sign + notarize), and attach the `.dmg` to a
   GitHub Release. Verify: the release exists with the notarized dmg.
 - [ ] 5.3 Commit the version bumps (mac-helper 0.4.3, any helper docs) and push `main`. Verify:
