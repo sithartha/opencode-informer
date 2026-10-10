@@ -33,7 +33,7 @@
   for the App Store Connect credential, use the app-specific password from
   `~/.config/opencode/asc-app-password` (the project's convention). Verify: the submission is
   accepted by App Store Connect.
-- [ ] 4.3 Confirm testability: the 0.1.1 build appears in TestFlight (after Apple processing) and
+- [x] 4.3 Confirm testability: the 0.1.1 build appears in TestFlight (after Apple processing) and
   installs on the phone. Verify: TestFlight lists 0.1.1, or report the processing state.
 
 ## 5. Other components
@@ -44,5 +44,5 @@
 - [x] 5.2 macOS helper: bump `mac-helper/Resources/Info.plist` to 0.4.3, run
   `mac-helper/scripts/release-helper.sh` (Developer ID sign + notarize), and attach the `.dmg` to a
   GitHub Release. Verify: the release exists with the notarized dmg.
-- [ ] 5.3 Commit the version bumps (mac-helper 0.4.3, any helper docs) and push `main`. Verify:
+- [x] 5.3 Commit the version bumps (mac-helper 0.4.3, any helper docs) and push `main`. Verify:
   `git status` clean and `origin/main` matches.
