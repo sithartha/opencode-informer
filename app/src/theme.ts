@@ -1,9 +1,11 @@
-export type SkinId = "default" | "evangelion" | "sanrio" | "starwars"
+export type SkinId = "default" | "evangelion" | "sanrio" | "starwars" | "tunes" | "classic-os"
 export type DefaultMode = "light" | "dark" | "system"
 export type UnitId = "unit00" | "unit01" | "unit02"
 export type SanrioId = "kitty" | "chococat"
 export type StarWarsId = "sith" | "jedi"
-export type ThemeOption = DefaultMode | UnitId | SanrioId | StarWarsId
+export type TunesId = "classic" | "bento"
+export type ClassicOSId = "blue" | "dark"
+export type ThemeOption = DefaultMode | UnitId | SanrioId | StarWarsId | TunesId | ClassicOSId
 
 export interface Theme {
   skin: SkinId
@@ -414,6 +416,170 @@ const sith: Theme = {
   permissionText: "#ffd9a0",
 }
 
+// --- Tunes skin: a classic media player (Classic dark / Bento light) ---
+
+const tunesClassic: Theme = {
+  skin: "tunes",
+  variant: "classic",
+  dark: true,
+  background: "#1b1b1e",
+  surface: "#2b2b30",
+  border: "#4a4a52",
+  text: "#e8e8ee",
+  textSecondary: "#b8b8c2",
+  textMuted: "#8a8a96",
+  accent: "#3bd16f",
+  secondaryAccent: "#ffb000",
+  allow: "#3bd16f",
+  deny: "#ff5a5a",
+  option: "#3bd16f",
+  pendingBg: "#2a2208",
+  pendingBorder: "#6b5410",
+  pendingTitle: "#ffe08a",
+  pendingBody: "#e8d0a0",
+  badgeBg: "#33333a",
+  badgeText: "#d8d8e0",
+  inputBg: "#232328",
+  inputBorder: "#4a4a52",
+  error: "#ff6b6b",
+  shadow: "rgba(0,0,0,0.55)",
+  scrim: "rgba(0,0,0,0.66)",
+  bgGradient: ["#232328", "#141416"],
+  cardBorder: ["#5a5a64", "#2a2a30"],
+  accentGradient: ["#4de07f", "#1f9d4f"],
+  glow: "rgba(59,209,111,0.42)",
+  questionBorder: ["#3bd16f", "#8fe0a8"],
+  questionGlow: "rgba(59,209,111,0.5)",
+  questionBgGradient: ["rgba(59,209,111,0.12)", "rgba(255,176,0,0.05)"],
+  questionText: "#bff0cf",
+  permissionBorder: ["#ffb000", "#ff7a00"],
+  permissionGlow: "rgba(255,176,0,0.5)",
+  permissionBgGradient: ["rgba(255,176,0,0.12)", "rgba(255,122,0,0.05)"],
+  permissionText: "#ffe0a0",
+}
+
+const tunesBento: Theme = {
+  skin: "tunes",
+  variant: "bento",
+  dark: false,
+  background: "#e9eaec",
+  surface: "#f7f7f8",
+  border: "#c3c6cb",
+  text: "#23262b",
+  textSecondary: "#5a5f68",
+  textMuted: "#8b909a",
+  accent: "#f28b00",
+  secondaryAccent: "#e2542a",
+  allow: "#1f9d4f",
+  deny: "#d93025",
+  option: "#f28b00",
+  pendingBg: "#fff4e0",
+  pendingBorder: "#f2c98a",
+  pendingTitle: "#8a4b0a",
+  pendingBody: "#7a4a12",
+  badgeBg: "#e3e5e8",
+  badgeText: "#42464d",
+  inputBg: "#ffffff",
+  inputBorder: "#c9ccd1",
+  error: "#d93025",
+  shadow: "rgba(30,32,36,0.14)",
+  scrim: "rgba(30,32,36,0.44)",
+  bgGradient: ["#f2f3f5", "#dcdde0"],
+  cardBorder: ["#ffffff", "#cfd2d6"],
+  accentGradient: ["#ffa733", "#f26800"],
+  glow: "rgba(242,139,0,0.30)",
+  questionBorder: ["#ffb84d", "#f28b00"],
+  questionGlow: "rgba(242,139,0,0.36)",
+  questionBgGradient: ["rgba(242,139,0,0.08)", "rgba(226,84,42,0.03)"],
+  questionText: "#8a4b0a",
+  permissionBorder: ["#f2c14e", "#e2542a"],
+  permissionGlow: "rgba(226,84,42,0.36)",
+  permissionBgGradient: ["rgba(242,193,78,0.12)", "rgba(226,84,42,0.03)"],
+  permissionText: "#8a3a12",
+}
+
+// --- Classic OS skin: a classic desktop (Blue light / Dark) ---
+
+const classicOSBlue: Theme = {
+  skin: "classic-os",
+  variant: "blue",
+  dark: false,
+  background: "#d7e3f4",
+  surface: "#ffffff",
+  border: "#7ba7e0",
+  text: "#17324f",
+  textSecondary: "#3f5f86",
+  textMuted: "#6d86a6",
+  accent: "#1c6fd6",
+  secondaryAccent: "#3fa32a",
+  allow: "#2e9b23",
+  deny: "#d0342c",
+  option: "#1c6fd6",
+  pendingBg: "#fff8e0",
+  pendingBorder: "#e8c86a",
+  pendingTitle: "#8a5a00",
+  pendingBody: "#7a5200",
+  badgeBg: "#e3edfb",
+  badgeText: "#2f4f78",
+  inputBg: "#ffffff",
+  inputBorder: "#a9c4e6",
+  error: "#d0342c",
+  shadow: "rgba(20,50,90,0.16)",
+  scrim: "rgba(20,40,70,0.42)",
+  bgGradient: ["#eaf1fb", "#cfe0f6"],
+  cardBorder: ["#ffffff", "#b9d0ee"],
+  accentGradient: ["#3f8be6", "#1558b0"],
+  glow: "rgba(28,111,214,0.30)",
+  questionBorder: ["#5aa0ef", "#1c6fd6"],
+  questionGlow: "rgba(28,111,214,0.36)",
+  questionBgGradient: ["rgba(28,111,214,0.08)", "rgba(63,163,42,0.03)"],
+  questionText: "#12407e",
+  permissionBorder: ["#ffd34e", "#e0a800"],
+  permissionGlow: "rgba(224,168,0,0.36)",
+  permissionBgGradient: ["rgba(255,211,78,0.12)", "rgba(224,168,0,0.03)"],
+  permissionText: "#8a5a00",
+}
+
+const classicOSDark: Theme = {
+  skin: "classic-os",
+  variant: "dark",
+  dark: true,
+  background: "#0d1520",
+  surface: "#16202e",
+  border: "#2b3d54",
+  text: "#e6eef8",
+  textSecondary: "#a7b9cf",
+  textMuted: "#6f8399",
+  accent: "#4f9bf0",
+  secondaryAccent: "#5fc84a",
+  allow: "#5fc84a",
+  deny: "#ff5a52",
+  option: "#4f9bf0",
+  pendingBg: "#241d08",
+  pendingBorder: "#6b5410",
+  pendingTitle: "#ffe08a",
+  pendingBody: "#e8d0a0",
+  badgeBg: "#1d2a3a",
+  badgeText: "#c8d6e8",
+  inputBg: "#1a2432",
+  inputBorder: "#33465e",
+  error: "#ff6b6b",
+  shadow: "rgba(0,0,0,0.55)",
+  scrim: "rgba(4,10,18,0.66)",
+  bgGradient: ["#101a28", "#0b121c"],
+  cardBorder: ["#33465e", "#16202e"],
+  accentGradient: ["#5aa6f2", "#2f6fd0"],
+  glow: "rgba(79,155,240,0.42)",
+  questionBorder: ["#5aa6f2", "#8fd0ff"],
+  questionGlow: "rgba(79,155,240,0.5)",
+  questionBgGradient: ["rgba(79,155,240,0.12)", "rgba(95,200,74,0.04)"],
+  questionText: "#bfe0ff",
+  permissionBorder: ["#ffd34e", "#e0a800"],
+  permissionGlow: "rgba(224,168,0,0.5)",
+  permissionBgGradient: ["rgba(255,211,78,0.10)", "rgba(224,168,0,0.04)"],
+  permissionText: "#ffe0a0",
+}
+
 export interface SkinDef {
   id: SkinId
   name: string
@@ -475,13 +641,46 @@ export const SKINS: SkinDef[] = [
     resolve: (option, systemScheme) =>
       option === "jedi" ? jedi : option === "system" ? (systemScheme === "dark" ? sith : jedi) : sith,
   },
+  {
+    id: "tunes",
+    name: "Tunes",
+    description: "Retro media player · 2 looks",
+    options: [
+      { id: "classic", name: "Classic" },
+      { id: "bento", name: "Bento" },
+      { id: "system", name: "System" },
+    ],
+    defaultOption: "classic",
+    resolve: (option, systemScheme) =>
+      option === "bento" ? tunesBento : option === "system" ? (systemScheme === "dark" ? tunesClassic : tunesBento) : tunesClassic,
+  },
+  {
+    id: "classic-os",
+    name: "Classic OS",
+    description: "Classic desktop · 2 looks",
+    options: [
+      { id: "blue", name: "Blue" },
+      { id: "dark", name: "Dark" },
+      { id: "system", name: "System" },
+    ],
+    defaultOption: "blue",
+    resolve: (option, systemScheme) =>
+      option === "dark" ? classicOSDark : option === "system" ? (systemScheme === "dark" ? classicOSDark : classicOSBlue) : classicOSBlue,
+  },
 ]
 
 export const DEFAULT_SKIN: SkinId = "default"
 export const DEFAULT_OPTION: ThemeOption = "system"
 
+/**
+ * Whether the interface theme picker is available. Disabled for the TestFlight
+ * build so it ships with only the Default theme; the other skins stay in the
+ * catalog, and re-enabling is flipping this flag.
+ */
+export const THEMES_ENABLED = false
+
 export function isSkinId(value: unknown): value is SkinId {
-  return value === "default" || value === "evangelion" || value === "sanrio" || value === "starwars"
+  return value === "default" || value === "evangelion" || value === "sanrio" || value === "starwars" || value === "tunes" || value === "classic-os"
 }
 
 export function skinDef(id: SkinId): SkinDef {
@@ -496,6 +695,14 @@ export function resolveTheme(skin: string | null | undefined, option: string | n
   const def = isSkinId(skin) ? skinDef(skin) : skinDef(DEFAULT_SKIN)
   const chosen = def.options.some((o) => o.id === option) ? (option as ThemeOption) : def.defaultOption
   return def.resolve(chosen, systemScheme)
+}
+
+/** The yellow-gold used for the Tunes mark on the dark (Classic) variant. */
+export const TUNES_GOLD = "#ffd23f"
+
+/** The tint to render the theme's mark with: gold for the dark Tunes variant, else the accent. */
+export function markTint(theme: Theme): string {
+  return theme.skin === "tunes" && theme.dark ? TUNES_GOLD : theme.accent
 }
 
 /** Migrate a legacy stored value (`light`/`dark`/`system` or a unit id) to a skin + option. */

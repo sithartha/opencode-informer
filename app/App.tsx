@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, useColorScheme, View, type LayoutChangeEvent } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { useBridge } from "./src/useBridge"
-import type { PendingRequest, Session } from "./src/events"
+import { orderSessions, type PendingRequest, type Session } from "./src/events"
 import { aggregate } from "./src/aggregate"
-import { resolveTheme, SKINS, skinDef } from "./src/theme"
+import { resolveTheme, SKINS, skinDef, THEMES_ENABLED } from "./src/theme"
 import { createStyles } from "./src/styles"
 import { liveActivity } from "./src/liveActivity"
 import { joinHostPort } from "./src/manualConnect"
@@ -49,7 +49,11 @@ export default function App() {
   } = useBridge()
 
   const systemScheme = useColorScheme()
-  const theme = resolveTheme(skin, themeOption, systemScheme)
+  const theme = resolveTheme(
+    THEMES_ENABLED ? skin : "default",
+    THEMES_ENABLED ? themeOption : "system",
+    systemScheme,
+  )
   const styles = useMemo(() => createStyles(theme), [theme])
 
   // Store the theme before effects run (so the activity starts with the right
@@ -153,14 +157,11 @@ export default function App() {
   const pending = Object.values(appState.pending)
   const agg = aggregate(appState)
 
-  // Newer requests sort higher: a session with a pending request moves above the
-  // ones without, and the most recently arrived request comes first. Sessions
-  // without a request keep their existing order.
+  // Attention first, then working, then inactive. Within the attention tier the
+  // most recently arrived request comes first (see orderSessions).
   const pendingRank = new Map<string, number>()
   pending.forEach((request, index) => pendingRank.set(request.sessionID, index))
-  const sessions = Object.values(appState.sessions).sort(
-    (a, b) => (pendingRank.get(b.id) ?? -1) - (pendingRank.get(a.id) ?? -1),
-  )
+  const sessions = orderSessions(Object.values(appState.sessions), pendingRank)
 
   const pendingBySession: Record<string, PendingRequest[]> = {}
   for (const request of pending) {
@@ -238,7 +239,13 @@ export default function App() {
           </>
         ) : null}
 
-        <Text style={styles.section}>Sessions</Text>
+        {theme.skin === "classic-os" ? (
+          <View style={styles.sessionsPill}>
+            <Text style={styles.sessionsPillText}>Sessions</Text>
+          </View>
+        ) : (
+          <Text style={styles.section}>Sessions</Text>
+        )}
         {sessions.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.empty}>No active sessions</Text>
@@ -286,6 +293,8 @@ export default function App() {
               </PressableScale>
             </View>
 
+            {THEMES_ENABLED ? (
+              <>
             <Text style={styles.section}>Appearance</Text>
             <Text style={styles.fieldLabel}>Theme</Text>
             {SKINS.map((entry) => {
@@ -326,7 +335,7 @@ export default function App() {
                 </TouchableOpacity>
               )
             })}
-            <Text style={styles.fieldLabel}>{skin === "evangelion" ? "Unit" : "Appearance"}</Text>
+            <Text style={styles.fieldLabel}>{skin === "evangelion" ? "Unit" : skin === "tunes" || skin === "classic-os" ? "Look" : "Appearance"}</Text>
             <View style={styles.segment}>
               {skinDef(skin).options.map((option) => {
                 const selected = themeOption === option.id
@@ -348,8 +357,14 @@ export default function App() {
             <Text style={styles.fieldDescription}>
               {skin === "evangelion"
                 ? "NERV interface using one Evangelion unit's colors."
-                : "Light, Dark, or follow your iPhone's setting."}
+                : skin === "tunes"
+                  ? "Classic media player chrome — a dark stock look or the light recolor."
+                  : skin === "classic-os"
+                    ? "Classic desktop interface — the blue look or a dark counterpart."
+                    : "Light, Dark, or follow your iPhone's setting."}
             </Text>
+              </>
+            ) : null}
 
             <Text style={styles.section}>Connection</Text>
             <View style={styles.settingRow}>
@@ -382,7 +397,7 @@ export default function App() {
 
             <Text style={styles.section}>About</Text>
             <Text style={styles.about}>{APP_DESCRIPTION}</Text>
-            <Text style={styles.about}>Version 0.1.0</Text>
+            <Text style={styles.about}>Version 0.1.1</Text>
 
             <Text style={styles.section}>Demo</Text>
             <PressableScale

@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { activityConfig, activityLabel, activityState, activityStatus, activityTitle } from "../src/liveActivityState"
+import { activityConfig, activityLabel, activityMark, activityState, activityStatus, activityTitle } from "../src/liveActivityState"
 import { resolveTheme } from "../src/theme"
 
 const plain = resolveTheme("default", "light")
@@ -52,12 +52,24 @@ test("labels and status words mirror the hero per skin", () => {
   assert.equal(activityLabel(resolveTheme("evangelion", "unit01")), "MAGI SYSTEM")
   assert.equal(activityLabel(resolveTheme("sanrio", "chococat")), "CHOCOCAT")
   assert.equal(activityLabel(resolveTheme("starwars", "sith")), "SITH ORDER")
+  assert.equal(activityLabel(resolveTheme("tunes", "classic")), "TUNES CLASSIC")
+  assert.equal(activityLabel(resolveTheme("tunes", "bento")), "TUNES BENTO")
+  assert.equal(activityLabel(resolveTheme("classic-os", "blue")), "CLASSIC OS")
   const clear = { total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }
   const waiting = { total: 1, running: 0, waitingApproval: 1, waitingAnswer: 0, stopped: 0 }
   assert.equal(activityStatus(resolveTheme("evangelion", "unit01"), clear), "NOMINAL")
   assert.equal(activityStatus(resolveTheme("evangelion", "unit01"), waiting), "ATTENTION")
   assert.equal(activityStatus(resolveTheme("sanrio", "kitty"), clear), "ALL GOOD")
   assert.equal(activityStatus(resolveTheme("starwars", "sith"), clear), "◆ READY")
+  assert.equal(activityStatus(resolveTheme("tunes", "classic"), clear), "PLAYING")
+  assert.equal(activityStatus(resolveTheme("tunes", "classic"), waiting), "NEEDS YOU")
+  assert.equal(activityStatus(resolveTheme("classic-os", "blue"), clear), "ACTIVE")
+})
+
+test("tunes and classic os use their own Live Activity marks", () => {
+  assert.equal(activityMark(resolveTheme("tunes", "classic")), "mark-bolt-gold")
+  assert.equal(activityMark(resolveTheme("tunes", "bento")), "mark-bolt-orange")
+  assert.equal(activityMark(resolveTheme("classic-os", "dark")), "mark-os")
 })
 
 test("themed label and status lead the subtitle", () => {

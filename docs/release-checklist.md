@@ -4,8 +4,8 @@ At https://appstoreconnect.apple.com → **My Apps** → **OpenCode Informer**.
 
 ## 1. Build
 
-- Left sidebar → **App Store** tab → the version **0.1.0** (create it if missing).
-- **Build** section → **Select a build** → choose **0.1.0 (7)** (wait if it is still processing).
+- Left sidebar → **App Store** tab → the version **0.1.1** (create it if missing).
+- **Build** section → **Select a build** → choose the latest **0.1.1 (…)** build (wait if it is still processing).
 - If asked about **Export Compliance / encryption**, answer **No** (the app uses only exempt
   encryption; `usesNonExemptEncryption` is already false).
 
@@ -45,7 +45,7 @@ At https://appstoreconnect.apple.com → **My Apps** → **OpenCode Informer**.
 - **Data collection:** "No, we do not collect data from this app" → results in **Data Not Collected**.
 - **Tracking:** No.
 
-## 6. Version information (0.1.0)
+## 6. Version information (0.1.1)
 
 - **Description:** paste the "Description" block from `docs/app-store-metadata.md`.
 - **Keywords:** `opencode,agent,coding,developer,terminal,approval,remote,bluetooth,cli,devtool`

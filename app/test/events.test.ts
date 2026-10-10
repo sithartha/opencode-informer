@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { applyEvent, emptyState, parseQuestions, parseSSE, stateFromSnapshot } from "../src/events"
+import { applyEvent, emptyState, orderSessions, parseQuestions, parseSSE, stateFromSnapshot, type Session } from "../src/events"
 
 test("parseSSE reassembles frames split across chunks", () => {
   const first = parseSSE("", "event: session.started\ndata: {\"sessionID\":\"a\"}\n\nevent: tool.st")
@@ -179,4 +179,37 @@ test("stateFromSnapshot carries a multi-question form", () => {
     ],
   })
   assert.equal(state.pending.r2.questions?.length, 2)
+})
+
+function session(id: string, phase: Session["phase"]): Session {
+  return { id, agent: "opencode", cwd: "/tmp", phase, currentTool: null, lastActivity: "", updatedAt: 0 }
+}
+
+test("orderSessions puts attention first, then working, then inactive", () => {
+  const sessions = [session("idle", "completed"), session("work", "running"), session("ask", "waiting-answer")]
+  const rank = new Map([["ask", 0]])
+  assert.deepEqual(
+    orderSessions(sessions, rank).map((s) => s.id),
+    ["ask", "work", "idle"],
+  )
+})
+
+test("orderSessions orders attention sessions by request recency", () => {
+  const sessions = [session("older", "waiting-permission"), session("newer", "waiting-permission")]
+  const rank = new Map([
+    ["older", 0],
+    ["newer", 1],
+  ])
+  assert.deepEqual(
+    orderSessions(sessions, rank).map((s) => s.id),
+    ["newer", "older"],
+  )
+})
+
+test("orderSessions keeps the given order within a tier", () => {
+  const sessions = [session("a", "running"), session("b", "running"), session("c", "running")]
+  assert.deepEqual(
+    orderSessions(sessions, new Map()).map((s) => s.id),
+    ["a", "b", "c"],
+  )
 })

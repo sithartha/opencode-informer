@@ -346,6 +346,8 @@ export function HeroCard({
   const nerv = theme.skin === "evangelion"
   const isStarWars = theme.skin === "starwars"
   const isSanrio = theme.skin === "sanrio"
+  const isTunes = theme.skin === "tunes"
+  const isClassicOS = theme.skin === "classic-os"
   const unit = theme.variant === "unit00" ? "00" : theme.variant === "unit02" ? "02" : "01"
   // MAGI cores: the three supercomputer brains mapped to the attention states.
   const cores = [
@@ -361,7 +363,7 @@ export function HeroCard({
       shimmer={hasAttention}
       shimmerLoop={hasAttention}
       animatedBorder={hasAttention}
-      radius={isSanrio ? 30 : 22}
+      radius={isSanrio ? 30 : isTunes ? 0 : isClassicOS ? 10 : 22}
       nerv={nerv}
       rail={isStarWars}
       innerStyle={{ backgroundColor: theme.surface }}
@@ -439,6 +441,33 @@ export function HeroCard({
             />
           </>
         ) : null}
+        {isTunes ? (
+          <>
+            <View style={styles.tunesHeader}>
+              <Text style={styles.tunesTitle}>{`▶ ${theme.dark ? "CLASSIC" : "BENTO"}`}</Text>
+              <Text style={styles.tunesStatus}>{hasAttention ? "NEEDS YOU" : idle ? "STOPPED" : "PLAYING"}</Text>
+            </View>
+            <View style={styles.tunesLevelBar}>
+              <View style={styles.tunesLevelFill} />
+            </View>
+          </>
+        ) : null}
+        {isClassicOS ? (
+          <>
+            <LinearGradient
+              colors={theme.accentGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.osTitleRow, { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 }]}
+            >
+              <Text style={styles.osTitleText}>CLASSIC OS</Text>
+              <Text style={styles.osStatus}>{hasAttention ? "NEEDS YOU" : idle ? "IDLE" : "ACTIVE"}</Text>
+            </LinearGradient>
+            <View style={styles.osStartChip}>
+              <Text style={styles.osStartText}>start</Text>
+            </View>
+          </>
+        ) : null}
         {hasAttention ? (
           <>
             <Text style={styles.heroCount}>{needsYou}</Text>
@@ -513,7 +542,7 @@ export function HeroCard({
               </View>
             ) : null}
           </View>
-        ) : isStarWars ? null : (
+        ) : isStarWars || isTunes ? null : (
           <>
             <View style={styles.heroBreakdown}>
               <View style={styles.heroStat}>
@@ -539,6 +568,14 @@ export function HeroCard({
             ) : null}
           </>
         )}
+        {isTunes ? (
+          <View style={styles.tunesReadout}>
+            <Text style={styles.tunesReadoutText}>WRK {agg.running}</Text>
+            <Text style={styles.tunesReadoutText}>PRM {agg.waitingApproval}</Text>
+            <Text style={styles.tunesReadoutText}>QST {agg.waitingAnswer}</Text>
+            <Text style={styles.tunesReadoutText}>INA {agg.stopped}</Text>
+          </View>
+        ) : null}
         {(hasAttention && onReviewWaiting) || onStart ? (
           <View style={styles.heroActions}>
             {hasAttention && onReviewWaiting ? (
@@ -947,6 +984,7 @@ export function SessionCard({
 }) {
   const request = requests[0]
   const isQuestion = request?.kind === "question"
+  const isClassicOS = theme.skin === "classic-os"
   const border = request ? (isQuestion ? theme.questionBorder : theme.permissionBorder) : theme.cardBorder
   const glow = request ? (isQuestion ? theme.questionGlow : theme.permissionGlow) : undefined
   const bgGradient = isQuestion ? theme.questionBgGradient : theme.permissionBgGradient
@@ -958,33 +996,66 @@ export function SessionCard({
       pulse={Boolean(request)}
       shimmer={Boolean(request)}
       animatedBorder={Boolean(request)}
-      radius={18}
+      radius={theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
       nerv={theme.skin === "evangelion"}
       rail={theme.skin === "starwars"}
       innerStyle={{ backgroundColor: theme.surface }}
     >
-      <View style={styles.cardPad}>
-        <View style={styles.sessionHeader}>
-          <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={9} pulse={session.phase === "running"} />
-          <Text style={styles.sessionTitle} numberOfLines={1}>
+      {isClassicOS ? (
+        <LinearGradient colors={theme.accentGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.osWindowBar}>
+          <GlowDot color="#ffffff" size={8} pulse={session.phase === "running"} />
+          <Text style={styles.osWindowTitle} numberOfLines={1}>
             {session.title || dirName(session.cwd) || session.id}
           </Text>
+          <Text style={styles.osWindowPhase}>{session.phase}</Text>
           {(session.phase === "running" || session.phase === "waiting-permission" || session.phase === "waiting-answer") && onStop ? (
             <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
-              <View style={styles.stopButton}>
-                <Text style={styles.stopButtonText}>Stop</Text>
+              <View style={styles.osCtlBtn}>
+                <Text style={styles.osCtlGlyph}>■</Text>
               </View>
             </PressableScale>
           ) : null}
-          <Text style={styles.sessionPhase}>{session.phase}</Text>
           {onClose ? (
             <PressableScale onPress={() => onClose(session.id)} accessibilityLabel="Close session">
-              <Text style={styles.closeButton}>×</Text>
+              <View style={[styles.osCtlBtn, styles.osCloseBtn]}>
+                <Text style={styles.osCloseGlyph}>✕</Text>
+              </View>
             </PressableScale>
           ) : null}
+        </LinearGradient>
+      ) : null}
+      {isClassicOS && session.cwd ? (
+        <View style={styles.osAddressBar}>
+          <Text style={styles.osAddressIcon}>📁</Text>
+          <Text style={styles.osAddressText} numberOfLines={1}>
+            {dirName(session.cwd)}
+          </Text>
         </View>
+      ) : null}
+      <View style={styles.cardPad}>
+        {isClassicOS ? null : (
+          <View style={styles.sessionHeader}>
+            <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={9} pulse={session.phase === "running"} />
+            <Text style={styles.sessionTitle} numberOfLines={1}>
+              {session.title || dirName(session.cwd) || session.id}
+            </Text>
+            {(session.phase === "running" || session.phase === "waiting-permission" || session.phase === "waiting-answer") && onStop ? (
+              <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
+                <View style={styles.stopButton}>
+                  <Text style={styles.stopButtonText}>Stop</Text>
+                </View>
+              </PressableScale>
+            ) : null}
+            <Text style={styles.sessionPhase}>{session.phase}</Text>
+            {onClose ? (
+              <PressableScale onPress={() => onClose(session.id)} accessibilityLabel="Close session">
+                <Text style={styles.closeButton}>×</Text>
+              </PressableScale>
+            ) : null}
+          </View>
+        )}
         <View style={styles.metaRow}>
-          {session.cwd ? <Text style={styles.dirChip}>{dirName(session.cwd)}</Text> : null}
+          {session.cwd && !isClassicOS ? <Text style={styles.dirChip}>{dirName(session.cwd)}</Text> : null}
           <PressableScale onPress={() => onOpenSwitcher?.(session)} accessibilityLabel="Change mode and model">
             <Text style={styles.metaChip}>
               {session.agent || "agent"}
@@ -1043,7 +1114,7 @@ export function NeedsAttentionCard({
   const bgGradient = isQuestion ? theme.questionBgGradient : theme.permissionBgGradient
   const text = isQuestion ? theme.questionText : theme.permissionText
   return (
-    <GradientSurface colors={border} glow={glow} pulse shimmer animatedBorder radius={18} nerv={theme.skin === "evangelion"} rail={theme.skin === "starwars"} innerStyle={{ backgroundColor: theme.surface }}>
+    <GradientSurface colors={border} glow={glow} pulse shimmer animatedBorder radius={theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18} nerv={theme.skin === "evangelion"} rail={theme.skin === "starwars"} innerStyle={{ backgroundColor: theme.surface }}>
       <View style={styles.cardPad}>
         <View style={[styles.inlineGlow, { marginTop: 0, shadowColor: glow }]}>
           <LinearGradient colors={bgGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inlineGradient}>

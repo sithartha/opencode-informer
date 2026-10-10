@@ -46,6 +46,10 @@ export function activityMark(theme: Theme | null): string {
       return theme.variant === "chococat" ? "mark-chococat" : "mark-kitty"
     case "starwars":
       return theme.variant === "jedi" ? "mark-rebel" : "mark-empire"
+    case "tunes":
+      return theme.dark ? "mark-bolt-gold" : "mark-bolt-orange"
+    case "classic-os":
+      return "mark-os"
     default:
       return "oi"
   }
@@ -60,6 +64,10 @@ export function activityLabel(theme: Theme | null): string {
       return theme.dark ? "CHOCOCAT" : "HELLO KITTY"
     case "starwars":
       return theme.dark ? "SITH ORDER" : "JEDI ORDER"
+    case "tunes":
+      return theme.dark ? "TUNES CLASSIC" : "TUNES BENTO"
+    case "classic-os":
+      return "CLASSIC OS"
     default:
       return ""
   }
@@ -76,6 +84,10 @@ export function activityStatus(theme: Theme | null, agg: Aggregate): string {
       return attention ? "NEEDS YOU" : idle ? "QUIET" : "ALL GOOD"
     case "starwars":
       return attention ? "◆ ALERT" : idle ? "◇ IDLE" : "◆ READY"
+    case "tunes":
+      return attention ? "NEEDS YOU" : idle ? "STOPPED" : "PLAYING"
+    case "classic-os":
+      return attention ? "NEEDS YOU" : idle ? "IDLE" : "ACTIVE"
     default:
       return attention ? "NEEDS YOU" : idle ? "IDLE" : "ALL CLEAR"
   }

@@ -178,7 +178,13 @@ export function DemoScreen({
           <GradientButton label="Complete one" onPress={completeOne} styles={styles} colors={theme.accentGradient} />
         </View>
 
-        <Text style={styles.section}>Sessions</Text>
+        {theme.skin === "classic-os" ? (
+          <View style={styles.sessionsPill}>
+            <Text style={styles.sessionsPillText}>Sessions</Text>
+          </View>
+        ) : (
+          <Text style={styles.section}>Sessions</Text>
+        )}
         {sessions.map((session, index) => (
           <FadeIn key={session.id} delay={index * 40} style={styles.cardGap}>
             <SessionCard

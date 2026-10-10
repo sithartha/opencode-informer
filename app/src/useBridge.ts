@@ -608,6 +608,12 @@ export function useBridge() {
     }
   }, [])
 
+  // Clear a Live Activity left over from a previous run before the first update can
+  // start a new one, so the Lock Screen never shows two cards.
+  useEffect(() => {
+    liveActivity.deferUntil(endStaleLiveActivity())
+  }, [])
+
   useEffect(() => {
     liveActivity.update(appState)
     pendingRef.current = appState.pending
@@ -733,9 +739,6 @@ export function useBridge() {
       setLiveActivityEnabledState(enabled)
       liveActivity.setEnabled(enabled)
     })
-
-    // Clear a Live Activity left over from a previous run before starting a new one.
-    void endStaleLiveActivity()
 
     void getDeviceName().then((name) => {
       // Prefer the real device name; a stored name only fills in when the system

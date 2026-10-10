@@ -118,3 +118,62 @@ test("the theme is applied to the started activity", () => {
   controller.update(twoRunning())
   assert.equal((calls.lastConfig as { backgroundColor?: string }).backgroundColor, theme.surface)
 })
+
+test("holds the first start until the leftover cleanup resolves", async () => {
+  const { api, calls } = fakeApi()
+  const controller = new LiveActivityController(api)
+
+  let release!: () => void
+  const cleanup = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  controller.deferUntil(cleanup)
+  controller.update(twoRunning())
+  assert.equal(calls.start, 0)
+
+  release()
+  await cleanup
+  await Promise.resolve()
+  assert.equal(calls.start, 1)
+})
+
+test("re-theming ends the old activity before starting the replacement", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] })
+  const { api, calls } = fakeApi()
+  const controller = new LiveActivityController(api)
+
+  controller.setTheme(resolveTheme("tunes", "classic"))
+  controller.update(twoRunning())
+  assert.equal(calls.start, 1)
+
+  controller.refreshTheme()
+  assert.equal(calls.stop, 1)
+  assert.equal(calls.start, 1) // still settling: no second card yet
+
+  controller.update(twoRunning()) // arrives during the settle
+  assert.equal(calls.start, 1)
+
+  t.mock.timers.tick(1500)
+  assert.equal(calls.start, 2) // exactly one replacement
+})
+
+test("reconnecting after a timeout stop does not double-start", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] })
+  const { api, calls } = fakeApi()
+  const controller = new LiveActivityController(api)
+
+  controller.update(twoRunning())
+  assert.equal(calls.start, 1)
+
+  controller.setDisconnected(true)
+  t.mock.timers.tick(30 * 60 * 1000)
+  assert.equal(calls.stop, 1)
+
+  // A reconnect inside the settle window is deferred, not started a second time.
+  controller.setDisconnected(false)
+  controller.update(twoRunning())
+  assert.equal(calls.start, 1)
+
+  t.mock.timers.tick(1500)
+  assert.equal(calls.start, 2)
+})

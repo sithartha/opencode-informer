@@ -351,3 +351,20 @@ export function parseSSE(buffer: string, chunk: string): { events: ActivityEvent
 
   return { events, rest }
 }
+
+/**
+ * Order session cards by what the user needs first: sessions with a pending request,
+ * then running sessions, then the rest. Within the attention tier the most recently
+ * arrived request comes first (higher rank); the relative order is otherwise kept.
+ */
+export function orderSessions(sessions: Session[], pendingRank: Map<string, number>): Session[] {
+  const tier = (session: Session): number =>
+    (pendingRank.get(session.id) ?? -1) >= 0 ? 0 : session.phase === "running" ? 1 : 2
+  return [...sessions].sort((a, b) => {
+    const tierA = tier(a)
+    const tierB = tier(b)
+    if (tierA !== tierB) return tierA - tierB
+    if (tierA === 0) return (pendingRank.get(b.id) ?? -1) - (pendingRank.get(a.id) ?? -1)
+    return 0
+  })
+}

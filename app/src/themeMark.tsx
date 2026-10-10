@@ -1,6 +1,6 @@
 import { Image, Text } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
-import type { Theme } from "./theme"
+import { markTint, type Theme } from "./theme"
 
 // Theme marks. Star Wars emblems are public-domain (Wikimedia); the Evangelion unit
 // art and the Sanrio characters are trademarks of their owners - used here per request.
@@ -11,6 +11,8 @@ import chococatImg from "../assets/logos/chococat.png"
 import eva00Img from "../assets/logos/eva00.png"
 import eva01Img from "../assets/logos/eva01.png"
 import eva02Img from "../assets/logos/eva02.png"
+import boltImg from "../assets/logos/bolt.png"
+import osImg from "../assets/logos/os.png"
 
 const EVA_HEADS: Record<string, number> = { unit00: eva00Img, unit01: eva01Img, unit02: eva02Img }
 
@@ -18,13 +20,19 @@ const EVA_HEADS: Record<string, number> = { unit00: eva00Img, unit01: eva01Img, 
 export function ThemeMark({ theme, size = 30 }: { theme: Theme; size?: number }) {
   const box = { width: size, height: size }
   if (theme.skin === "starwars") {
-    return <Image source={theme.variant === "sith" ? empireImg : rebelImg} style={[box, { tintColor: theme.accent }]} resizeMode="contain" />
+    return <Image source={theme.variant === "sith" ? empireImg : rebelImg} style={[box, { tintColor: markTint(theme) }]} resizeMode="contain" />
   }
   if (theme.skin === "evangelion") {
     return <Image source={EVA_HEADS[theme.variant ?? "unit01"] ?? eva01Img} style={box} resizeMode="contain" />
   }
   if (theme.skin === "sanrio") {
     return <Image source={theme.variant === "chococat" ? chococatImg : kittyImg} style={box} resizeMode="contain" />
+  }
+  if (theme.skin === "tunes") {
+    return <Image source={boltImg} style={[box, { tintColor: markTint(theme) }]} resizeMode="contain" />
+  }
+  if (theme.skin === "classic-os") {
+    return <Image source={osImg} style={box} resizeMode="contain" />
   }
   return <DefaultMark theme={theme} size={size} />
 }

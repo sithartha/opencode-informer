@@ -2,6 +2,7 @@ import { fireEvent, render } from "@testing-library/react-native"
 import { Linking } from "react-native"
 import { BrandMark, CompactHero, ConfirmModal, GradientButton, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, SessionCard, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
+import { ThemeMark } from "../src/themeMark"
 import { createStyles } from "../src/styles"
 import { resolveTheme } from "../src/theme"
 import type { PendingRequest, Session } from "../src/events"
@@ -479,5 +480,77 @@ describe("DemoScreen switcher", () => {
     await fireEvent.press(getAllByLabelText("Change mode and model")[0])
     expect(getByText("Mode & model")).toBeTruthy()
     expect(getByText("build")).toBeTruthy()
+  })
+})
+
+describe("Tunes and Classic OS heroes", () => {
+  it("renders the Tunes player hero and readout", async () => {
+    const tunes = resolveTheme("tunes", "bento")
+    const { getByText } = await render(
+      <HeroCard agg={{ total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }} theme={tunes} styles={createStyles(tunes)} />,
+    )
+    expect(getByText("▶ BENTO")).toBeTruthy()
+    expect(getByText("PLAYING")).toBeTruthy()
+    expect(getByText("WRK 1")).toBeTruthy()
+  })
+
+  it("renders the Classic OS desktop hero", async () => {
+    const os = resolveTheme("classic-os", "blue")
+    const { getByText } = await render(
+      <HeroCard agg={{ total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }} theme={os} styles={createStyles(os)} />,
+    )
+    expect(getByText("CLASSIC OS")).toBeTruthy()
+    expect(getByText("ACTIVE")).toBeTruthy()
+    expect(getByText("start")).toBeTruthy()
+    expect(getByText("1 working")).toBeTruthy()
+  })
+})
+
+describe("Tunes refinements", () => {
+  it("uses square corners throughout", () => {
+    const styles = createStyles(resolveTheme("tunes", "classic"))
+    for (const style of [styles.statusPill, styles.gradientButton, styles.badge, styles.metaChip, styles.heroAdd, styles.segment, styles.freeformInput, styles.inputFull, styles.stopButton, styles.themeSwatch]) {
+      expect(style.borderRadius).toBe(0)
+    }
+  })
+
+  it("renders the dark mark in gold", async () => {
+    const tunes = resolveTheme("tunes", "classic")
+    const { toJSON } = await render(<ThemeMark theme={tunes} />)
+    expect(JSON.stringify(toJSON())).toContain("#ffd23f")
+  })
+})
+
+describe("Classic OS window chrome", () => {
+  it("styles section headers as title bars", () => {
+    const os = resolveTheme("classic-os", "blue")
+    const osStyles = createStyles(os)
+    expect(osStyles.section.backgroundColor).toBe(os.accent)
+    expect(osStyles.section.color).toBe("#ffffff")
+  })
+
+  it("renders window controls on a session card", async () => {
+    const os = resolveTheme("classic-os", "blue")
+    const { getByText } = await render(
+      <SessionCard
+        session={session({ phase: "running" })}
+        requests={[]}
+        resolve={jest.fn()}
+        theme={os}
+        styles={createStyles(os)}
+        onStop={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    )
+    expect(getByText("■")).toBeTruthy()
+    expect(getByText("✕")).toBeTruthy()
+  })
+
+  it("shows the directory as a path", async () => {
+    const os = resolveTheme("classic-os", "blue")
+    const { getByText } = await render(
+      <SessionCard session={session()} requests={[]} resolve={jest.fn()} theme={os} styles={createStyles(os)} />,
+    )
+    expect(getByText("📁")).toBeTruthy()
   })
 })

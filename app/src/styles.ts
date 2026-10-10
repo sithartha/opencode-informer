@@ -10,6 +10,8 @@ export function createStyles(t: Theme): Styles {
   if (t.skin === "evangelion") return createNervStyles(t) as unknown as Styles
   if (t.skin === "starwars") return createStarWarsStyles(t) as unknown as Styles
   if (t.skin === "sanrio") return createSanrioStyles(t)
+  if (t.skin === "tunes") return createTunesStyles(t)
+  if (t.skin === "classic-os") return createClassicOSStyles(t)
   return createDefaultStyles(t)
 }
 
@@ -72,6 +74,28 @@ function createDefaultStyles(t: Theme) {
     swSaberGlow: { width: "100%", marginBottom: 6, shadowColor: t.accent, shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
     swReadout: { flexDirection: "row", gap: 14, justifyContent: "center", flexWrap: "wrap" },
     swReadoutText: { fontSize: 10, color: t.textMuted, letterSpacing: 1 },
+    tunesHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    tunesTitle: { fontSize: 12, fontWeight: "700", color: t.accent, letterSpacing: 2, fontFamily: MONO },
+    tunesStatus: { fontSize: 11, fontWeight: "700", color: t.secondaryAccent, letterSpacing: 1, fontFamily: MONO },
+    tunesReadout: { flexDirection: "row", gap: 12, justifyContent: "center", flexWrap: "wrap" },
+    tunesReadoutText: { fontSize: 10, color: t.textMuted, letterSpacing: 1, fontFamily: MONO },
+    tunesLevelBar: { width: "100%", height: 10, borderRadius: 2, backgroundColor: t.badgeBg, borderWidth: 1, borderColor: t.border, overflow: "hidden", marginTop: 2 },
+    tunesLevelFill: { height: "100%", width: "68%" },
+    osTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
+    osTitleText: { fontSize: 12, fontWeight: "700", color: "#ffffff", letterSpacing: 0.5 },
+    osStatus: { fontSize: 11, fontWeight: "700", color: "#ffffff", letterSpacing: 0.5 },
+    osStartChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: t.secondaryAccent, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+    osStartText: { fontSize: 12, fontWeight: "700", color: "#ffffff" },
+    osWindowBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 10, paddingRight: 4, paddingTop: 4, paddingBottom: 4 },
+    osWindowTitle: { flex: 1, fontSize: 13, fontWeight: "700", color: "#ffffff" },
+    osWindowPhase: { fontSize: 10, fontWeight: "700", color: "rgba(255,255,255,0.85)", textTransform: "uppercase", letterSpacing: 0.5 },
+    osAddressBar: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: t.surface, borderBottomWidth: 1, borderColor: t.border, paddingHorizontal: 10, paddingVertical: 8, borderBottomLeftRadius: 8, borderBottomRightRadius: 8 },
+    osAddressIcon: { fontSize: 12, lineHeight: 15 },
+    osAddressText: { flex: 1, fontSize: 12, color: t.text, fontFamily: MONO },
+    osCtlBtn: { width: 24, height: 24, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.28)" },
+    osCtlGlyph: { color: "#ffffff", fontSize: 11, fontWeight: "700", lineHeight: 13 },
+    osCloseBtn: { backgroundColor: "#d0342c" },
+    osCloseGlyph: { color: "#ffffff", fontSize: 13, fontWeight: "700", lineHeight: 15 },
     heroAdd: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
     heroAddText: { fontSize: 24, fontWeight: "700", lineHeight: 26 },
     heroActions: { flexDirection: "row", gap: 12, marginTop: 4, flexWrap: "wrap", justifyContent: "center" },
@@ -122,6 +146,8 @@ function createDefaultStyles(t: Theme) {
     about: { fontSize: 14, color: t.textSecondary, lineHeight: 20, marginBottom: 8 },
 
     section: { fontSize: 12, fontWeight: "700", color: t.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 24, marginBottom: 12 },
+    sessionsPill: { alignSelf: "flex-start", backgroundColor: t.accent, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, marginTop: 24, marginBottom: 12 },
+    sessionsPillText: { fontSize: 12, fontWeight: "700", color: "#ffffff", letterSpacing: 0.5 },
     empty: { fontSize: 14, color: t.textMuted },
     emptyCard: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, borderRadius: 20, padding: 24, gap: 12, alignItems: "flex-start", shadowColor: t.shadow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
     emptyHint: { fontSize: 14, color: t.textMuted, lineHeight: 20 },
@@ -395,3 +421,79 @@ function createHudStyles(t: Theme, R: number, R_INNER: number, R_CHIP: number, u
 const createNervStyles = (t: Theme) => createHudStyles(t, 0, 0, 0, false)
 // Star Wars: rounded HUD panels, underlined section headers, a lightsaber rail.
 const createStarWarsStyles = (t: Theme) => createHudStyles(t, 12, 10, 8, true)
+
+// --- Tunes: a classic media player - square chrome, monospace LCD readouts ---
+function createTunesStyles(t: Theme): Styles {
+  const base = createDefaultStyles(t)
+  const square = { borderRadius: 0 }
+  return {
+    ...base,
+    gradientButton: { ...base.gradientButton, ...square },
+    input: { ...base.input, ...square, fontFamily: MONO },
+    inputFull: { ...base.inputFull, ...square },
+    rowButton: { ...base.rowButton, ...square },
+    themeCard: { ...base.themeCard, ...square },
+    themePreview: { ...base.themePreview, ...square },
+    themePreviewCard: { ...base.themePreviewCard, ...square },
+    themePreviewLine: { ...base.themePreviewLine, ...square },
+    themePreviewAccent: { ...base.themePreviewAccent, ...square },
+    emptyCard: { ...base.emptyCard, ...square },
+    activityBlock: { ...base.activityBlock, ...square },
+    messageCard: { ...base.messageCard, ...square },
+    inlineGlow: { ...base.inlineGlow, ...square, shadowOpacity: 0 },
+    inlineGradient: { ...base.inlineGradient, ...square },
+    actionInner: { ...base.actionInner, ...square },
+    heroSecondary: { ...base.heroSecondary, ...square },
+    heroAdd: { ...base.heroAdd, ...square },
+    demoBanner: { ...base.demoBanner, ...square },
+    confirmCard: { ...base.confirmCard, ...square },
+    segment: { ...base.segment, ...square },
+    segmentSelected: { ...base.segmentSelected, ...square },
+    segmentUnselected: { ...base.segmentUnselected, ...square },
+    freeformInput: { ...base.freeformInput, ...square },
+    themeSwatch: { ...base.themeSwatch, ...square },
+    statusPill: { ...base.statusPill, ...square },
+    compactServerPill: { ...base.compactServerPill, ...square },
+    badge: { ...base.badge, ...square },
+    metaChip: { ...base.metaChip, ...square },
+    dirChip: { ...base.dirChip, ...square },
+    costChip: { ...base.costChip, ...square },
+    stopButton: { ...base.stopButton, ...square },
+    tunesLevelBar: { ...base.tunesLevelBar, ...square },
+    tunesLevelFill: { ...base.tunesLevelFill, backgroundColor: t.accent },
+    title: { ...base.title, fontFamily: MONO, letterSpacing: 1 },
+    section: { ...base.section, fontFamily: MONO, letterSpacing: 1.5 },
+    heroCount: { ...base.heroCount, fontFamily: MONO, color: t.accent },
+    heroLabel: { ...base.heroLabel, fontFamily: MONO, letterSpacing: 0.5 },
+    heroStatus: { ...base.heroStatus, fontFamily: MONO, color: t.accent, letterSpacing: 1 },
+  } as unknown as Styles
+}
+
+// --- Classic OS: a classic desktop - rounded beveled chrome, gradient title bars ---
+function createClassicOSStyles(t: Theme): Styles {
+  const base = createDefaultStyles(t)
+  return {
+    ...base,
+    gradientButton: { ...base.gradientButton, borderRadius: 6 },
+    input: { ...base.input, borderRadius: 4 },
+    inputFull: { ...base.inputFull, borderRadius: 4 },
+    rowButton: { ...base.rowButton, borderRadius: 6 },
+    themeCard: { ...base.themeCard, borderRadius: 6, borderTopWidth: 2, borderTopColor: t.accent },
+    themePreview: { ...base.themePreview, borderRadius: 4 },
+    themePreviewCard: { ...base.themePreviewCard, borderRadius: 2 },
+    emptyCard: { ...base.emptyCard, borderRadius: 8 },
+    activityBlock: { ...base.activityBlock, borderRadius: 6 },
+    messageCard: { ...base.messageCard, borderRadius: 6 },
+    inlineGlow: { ...base.inlineGlow, borderRadius: 6 },
+    inlineGradient: { ...base.inlineGradient, borderRadius: 6 },
+    actionInner: { ...base.actionInner, borderRadius: 6 },
+    heroSecondary: { ...base.heroSecondary, borderRadius: 6, borderWidth: 1, borderColor: t.border },
+    demoBanner: { ...base.demoBanner, borderRadius: 6 },
+    confirmCard: { ...base.confirmCard, borderRadius: 8 },
+    segment: { ...base.segment, borderRadius: 6 },
+    segmentSelected: { ...base.segmentSelected, borderRadius: 4 },
+    segmentUnselected: { ...base.segmentUnselected, borderRadius: 4 },
+    section: { ...base.section, backgroundColor: t.accent, color: "#ffffff", paddingHorizontal: 10, paddingVertical: 6, borderTopLeftRadius: 6, borderTopRightRadius: 6, overflow: "hidden" },
+    stopButton: { ...base.stopButton, borderRadius: 4, backgroundColor: "#d0342c" },
+  } as unknown as Styles
+}
