@@ -65,3 +65,15 @@ test("migrateStoredTheme maps legacy values", () => {
   assert.equal(migrateStoredTheme("nope"), null)
   assert.equal(migrateStoredTheme(null), null)
 })
+
+test("theme names are renamed and de-trademarked", () => {
+  assert.equal(skinDef("default").name, "Default")
+  assert.equal(skinDef("evangelion").name, "Nerv")
+  assert.equal(skinDef("sanrio").name, "Cat")
+  assert.equal(skinDef("starwars").name, "The Force")
+  const banned = /evangelion|hello kitty|chococat|sanrio|star wars|sith|jedi/i
+  for (const skin of SKINS) {
+    assert.doesNotMatch(skin.name, banned, `${skin.id} name`)
+    assert.doesNotMatch(skin.description, banned, `${skin.id} description`)
+  }
+})

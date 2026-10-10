@@ -189,7 +189,9 @@ import WidgetKit
         + (isStale ? [IndicatorRow(text: "stale · not updating", color: "#FF9F0A")] : [])
       let labelColor = Color(hex: attributes.subtitleColor ?? "#DDDDDD")
 
-      HStack(alignment: .center, spacing: 16) {
+      VStack(spacing: 0) {
+        accentBar
+        HStack(alignment: .center, spacing: 16) {
         if total.number.isEmpty {
           // Status line (e.g. "No connection"): plain text, no count or dots.
           VStack(alignment: .leading, spacing: 3) {
@@ -205,7 +207,8 @@ import WidgetKit
           }
           .layoutPriority(1)
         } else {
-          // Big agent count, with a small "agents" label underneath.
+          // Big agent count, with a small "agents" label underneath. The minimum
+          // width keeps the label ("agent"/"agents") on one line.
           VStack(alignment: .leading, spacing: 0) {
             Text(total.number)
               .font(.system(size: 60, weight: .bold))
@@ -213,18 +216,29 @@ import WidgetKit
             Text(total.label)
               .font(.caption)
               .foregroundStyle(labelColor)
+              .fixedSize(horizontal: true, vertical: false)
           }
+          .frame(minWidth: 59, alignment: .leading)
 
-          // One small, vertically-centred dot per indicator line.
+          // The theme caption (dot-less, in the theme accent) plus one small,
+          // vertically-centred dot per attention-state line.
           VStack(alignment: .leading, spacing: 5) {
             ForEach(rows, id: \.self) { row in
-              HStack(spacing: 7) {
-                Circle()
-                  .fill(Color(hex: row.color))
-                  .frame(width: 5, height: 5)
+              if row.isHeader {
                 Text(row.text)
-                  .font(.subheadline)
-                  .foregroundStyle(labelColor)
+                  .font(.caption2)
+                  .fontWeight(.semibold)
+                  .tracking(1.2)
+                  .foregroundStyle(progressViewTint ?? labelColor)
+              } else {
+                HStack(spacing: 7) {
+                  Circle()
+                    .fill(Color(hex: row.color))
+                    .frame(width: 5, height: 5)
+                  Text(row.text)
+                    .font(.subheadline)
+                    .foregroundStyle(labelColor)
+                }
               }
             }
           }.layoutPriority(1)
@@ -235,14 +249,52 @@ import WidgetKit
         if let imageName = contentState.imageName {
           alignedImage(imageName: imageName)
         }
+        }
+        .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
       }
-      .padding(EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: trailing))
+      .background(watermark)
       .opacity(isStale ? 0.55 : 1)
+    }
+
+    /// A large, semi-transparent theme mark behind the content — the activity's
+    /// echo of the dashboard hero's watermark. It is a square 150% of the card's
+    /// height, its top-right corner pushed 40% of its own size right and up past the
+    /// card's top-right, so ~60% of it shows (the rest is cropped by the card).
+    @ViewBuilder
+    private var watermark: some View {
+      if let imageName = contentState.imageName {
+        GeometryReader { proxy in
+          Image.dynamic(assetNameOrPath: imageName)
+            .resizable()
+            .scaledToFit()
+            .frame(width: proxy.size.height * 1.5, height: proxy.size.height * 1.5)
+            .opacity(0.18)
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topTrailing)
+            .offset(x: proxy.size.height * 0.6, y: -proxy.size.height * 0.6)
+        }
+        .clipped()
+      }
+    }
+
+    /// A thin accent line across the top of the card, echoing the hero's accent
+    /// divider / lightsaber / hazard rail (color carried by `progressViewTint`).
+    private var accentBar: some View {
+      Group {
+        if let accent = progressViewTint {
+          LinearGradient(
+            colors: [accent.opacity(0), accent, accent.opacity(0)],
+            startPoint: .leading,
+            endPoint: .trailing
+          )
+          .frame(height: 3)
+        }
+      }
     }
 
     private struct IndicatorRow: Hashable {
       let text: String
       let color: String
+      var isHeader: Bool = false
     }
 
     /// "3 agents" -> ("3", "agents"); a non-numeric title is a status line.
@@ -254,11 +306,16 @@ import WidgetKit
       return ("", title)
     }
 
-    /// Turn "<count> <label>" lines into indicator rows with a dot color.
+    /// Turn "<count> <label>" lines into indicator rows with a dot color; a
+    /// "#"-prefixed line is the theme's hero label + status, rendered as a caption.
     private func parseIndicators(_ subtitle: String?) -> [IndicatorRow] {
       guard let subtitle else { return [] }
       return subtitle.split(separator: "\n").map { line in
-        let text = String(line)
+        var text = String(line)
+        if text.hasPrefix("# ") {
+          text = String(text.dropFirst(2)).uppercased()
+          return IndicatorRow(text: text, color: "#8E8E93", isHeader: true)
+        }
         let lowered = text.lowercased()
         let color: String
         if lowered.contains("permission") {

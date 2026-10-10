@@ -7,6 +7,7 @@ import type { PendingRequest, Session } from "./src/events"
 import { aggregate } from "./src/aggregate"
 import { resolveTheme, SKINS, skinDef } from "./src/theme"
 import { createStyles } from "./src/styles"
+import { liveActivity } from "./src/liveActivity"
 import { joinHostPort } from "./src/manualConnect"
 import { CompactHero, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
 import { ThemeMark } from "./src/themeMark"
@@ -51,6 +52,13 @@ export default function App() {
   const theme = resolveTheme(skin, themeOption, systemScheme)
   const styles = useMemo(() => createStyles(theme), [theme])
 
+  // Store the theme before effects run (so the activity starts with the right
+  // palette); re-theme a running activity when the theme changes.
+  liveActivity.setTheme(theme)
+  useEffect(() => {
+    liveActivity.refreshTheme()
+  }, [theme])
+
   const [showManual, setShowManual] = useState(false)
   const [manualError, setManualError] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState(deviceName)
@@ -76,11 +84,17 @@ export default function App() {
 
   // Scroll-driven collapse of the hero into the pinned compact bar.
   const heroScrollY = useRef(new Animated.Value(0)).current
-  const heroExpandedOpacity = heroScrollY.interpolate({ inputRange: [0, 72], outputRange: [1, 0], extrapolate: "clamp" })
-  const heroExpandedScale = heroScrollY.interpolate({ inputRange: [0, 72], outputRange: [1, 0.96], extrapolate: "clamp" })
-  const heroExpandedTranslate = heroScrollY.interpolate({ inputRange: [0, 72], outputRange: [0, -12], extrapolate: "clamp" })
-  const heroCompactOpacity = heroScrollY.interpolate({ inputRange: [36, 104], outputRange: [0, 1], extrapolate: "clamp" })
-  const heroCompactTranslate = heroScrollY.interpolate({ inputRange: [36, 104], outputRange: [-8, 0], extrapolate: "clamp" })
+  // The hero's measured layout (position + height within the scroll content) drives
+  // the collapse, so the expanded hero stays in step with the scroll over its whole
+  // height instead of fading out early and leaving a gap before the content below.
+  const [heroLayout, setHeroLayout] = useState<{ y: number; height: number } | null>(null)
+  const heroBottom = heroLayout ? Math.max(160, heroLayout.y + heroLayout.height) : 320
+  const heroCompactStart = Math.max(0, heroBottom - 140)
+  const heroExpandedOpacity = heroScrollY.interpolate({ inputRange: [0, heroBottom], outputRange: [1, 0], extrapolate: "clamp" })
+  const heroExpandedScale = heroScrollY.interpolate({ inputRange: [0, heroBottom], outputRange: [1, 0.97], extrapolate: "clamp" })
+  const heroExpandedTranslate = heroScrollY.interpolate({ inputRange: [0, heroBottom], outputRange: [0, -16], extrapolate: "clamp" })
+  const heroCompactOpacity = heroScrollY.interpolate({ inputRange: [heroCompactStart, heroBottom], outputRange: [0, 1], extrapolate: "clamp" })
+  const heroCompactTranslate = heroScrollY.interpolate({ inputRange: [heroCompactStart, heroBottom], outputRange: [-8, 0], extrapolate: "clamp" })
   const keyboardRef = useRef(0)
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   useEffect(() => {
@@ -185,7 +199,13 @@ export default function App() {
         </PressableScale>
         {connection.error ? <Text style={styles.error}>{connection.error}</Text> : null}
 
-        <Animated.View style={[styles.heroWrap, { opacity: heroExpandedOpacity, transform: [{ scale: heroExpandedScale }, { translateY: heroExpandedTranslate }] }]}>
+        <Animated.View
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout
+            setHeroLayout((prev) => (prev && prev.y === y && prev.height === height ? prev : { y, height }))
+          }}
+          style={[styles.heroWrap, { opacity: heroExpandedOpacity, transform: [{ scale: heroExpandedScale }, { translateY: heroExpandedTranslate }] }]}
+        >
           <HeroCard agg={agg} theme={theme} styles={styles} onStart={() => void beginStart()} onReviewWaiting={scrollToWaiting} />
         </Animated.View>
 

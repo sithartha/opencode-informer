@@ -439,8 +439,8 @@ export const SKINS: SkinDef[] = [
   },
   {
     id: "evangelion",
-    name: "Evangelion",
-    description: "NERV interface · Unit 00, 01, 02",
+    name: "Nerv",
+    description: "Unit console · Unit 00, 01, 02",
     options: [
       { id: "unit00", name: "Unit 00" },
       { id: "unit01", name: "Unit 01" },
@@ -451,8 +451,8 @@ export const SKINS: SkinDef[] = [
   },
   {
     id: "sanrio",
-    name: "Hello Kitty",
-    description: "Sanrio · Hello Kitty, Chococat",
+    name: "Cat",
+    description: "Kawaii cats · 2 looks + System",
     options: [
       { id: "kitty", name: "Hello Kitty" },
       { id: "chococat", name: "Chococat" },
@@ -464,8 +464,8 @@ export const SKINS: SkinDef[] = [
   },
   {
     id: "starwars",
-    name: "Star Wars",
-    description: "Star Wars · Sith, Jedi",
+    name: "The Force",
+    description: "Space saga · 2 sides + System",
     options: [
       { id: "sith", name: "Sith" },
       { id: "jedi", name: "Jedi" },

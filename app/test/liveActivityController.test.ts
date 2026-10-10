@@ -2,12 +2,14 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { LiveActivityController } from "../src/liveActivityController"
 import { emptyState, stateFromSnapshot, type Session } from "../src/events"
+import { resolveTheme } from "../src/theme"
 
 function fakeApi() {
-  const calls = { start: 0, update: 0, stop: 0, lastTitle: "", lastSubtitle: "" }
+  const calls = { start: 0, update: 0, stop: 0, lastTitle: "", lastSubtitle: "", lastConfig: undefined as unknown }
   const api = {
-    startActivity: () => {
+    startActivity: (_state: unknown, config: unknown) => {
       calls.start += 1
+      calls.lastConfig = config
       return "act-1"
     },
     updateActivity: (_id: string, state: { title?: string; subtitle?: string }) => {
@@ -43,13 +45,15 @@ test("starts on first active state and updates afterwards", () => {
   assert.equal(calls.update, 1)
 })
 
-test("ends when the aggregate returns to zero", () => {
+test("keeps the activity when the aggregate returns to zero", () => {
   const { api, calls } = fakeApi()
   const controller = new LiveActivityController(api)
 
   controller.update(twoRunning())
   controller.update(emptyState())
-  assert.equal(calls.stop, 1)
+  assert.equal(calls.start, 1)
+  assert.equal(calls.stop, 0)
+  assert.equal(calls.update, 1)
 })
 
 test("a stale flag re-renders with the stale marker", () => {
@@ -83,12 +87,34 @@ test("a disconnected flag shows no connection while an activity is running", () 
   assert.match(calls.lastSubtitle, /OpenCode/)
 })
 
-test("disconnected keeps the activity alive even at zero", () => {
+test("a disconnection alone does not end the activity immediately", () => {
   const { api, calls } = fakeApi()
   const controller = new LiveActivityController(api)
 
   controller.update(twoRunning())
   controller.setDisconnected(true)
-  controller.update(emptyState())
   assert.equal(calls.stop, 0)
+})
+
+test("ends after a long disconnection", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] })
+  const { api, calls } = fakeApi()
+  const controller = new LiveActivityController(api)
+
+  controller.update(twoRunning())
+  controller.setDisconnected(true)
+  assert.equal(calls.stop, 0)
+
+  t.mock.timers.tick(30 * 60 * 1000)
+  assert.equal(calls.stop, 1)
+})
+
+test("the theme is applied to the started activity", () => {
+  const { api, calls } = fakeApi()
+  const controller = new LiveActivityController(api)
+  const theme = resolveTheme("starwars", "sith")
+
+  controller.setTheme(theme)
+  controller.update(twoRunning())
+  assert.equal((calls.lastConfig as { backgroundColor?: string }).backgroundColor, theme.surface)
 })
