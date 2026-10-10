@@ -21,9 +21,9 @@ TestFlight, and commits the work.
 - **Commit + push**: commit the accumulated theme + Live Activity work (app, tests, assets, OpenSpec
   specs and archived changes) together with this release change, and push `main` to
   `github.com/sithartha/opencode-informer`.
-- **Other components**: none need a release this time — only the app changed. The plugin is private
-  (not published), and the macOS helper (`mac-helper/`) and the cross-platform helper (`helper/`)
-  are untouched, so no helper release or bin is produced.
+- **Other components**: release both helpers, which have unreleased changes — the cross-platform
+  helper (`helper/`, released as `helper-v0.5.0` via the CI matrix) and the macOS helper
+  (`mac-helper/`, version 0.4.3 via `release-helper.sh`).
 
 ## Capabilities
 

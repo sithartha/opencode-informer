@@ -1,6 +1,6 @@
 [package]
 name = "opencode-informer-helper"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Cross-platform companion helper for OpenCode Informer: BLE doorbell peripheral, rendezvous, and pairing approval for macOS, Linux, and Windows."
 license = "MIT"

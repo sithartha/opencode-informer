@@ -53,9 +53,11 @@ exactly what is on GitHub. One descriptive commit (the theme work and the Live A
 the OpenSpec artifacts and archived changes. Do not tag the app release (no app-tag convention);
 helper releases are tagged separately if/when produced.
 
-**5. Skip other components.** Only `app/**` changed; `plugin/`, `mac-helper/`, and `helper/` are
-untouched, so no helper release or CI bin is needed. Note this in the final summary rather than
-producing empty releases.
+**5. Release both helpers.** `helper/` differs from the last helper release tag (`helper-v0.4.0`)
+and `mac-helper/` changed after its 0.4.2 release, so both get a release: the cross-platform helper
+via the CI matrix (binaries attached to a `helper-v0.5.0` Release, unsigned per the checklist) and
+the macOS helper via `release-helper.sh` (0.4.3, signed + notarized) attached to a GitHub Release.
+GitHub operations use the token in `~/.config/opencode/gh-token` (scopes: repo, workflow).
 
 **6. Temporary theme gate for the TestFlight build.** Add a build-time flag (e.g. `THEMES_ENABLED`
 in `app/src/theme.ts`, set to `false` for this release) that (a) forces the resolved theme to the

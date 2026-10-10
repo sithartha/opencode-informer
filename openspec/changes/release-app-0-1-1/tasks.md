@@ -2,15 +2,15 @@
 
 ## 1. Version bump
 
-- [ ] 1.1 In `app/app.json`, set `expo.version` to `0.1.1` (leave `ios.buildNumber` to EAS's remote
+- [x] 1.1 In `app/app.json`, set `expo.version` to `0.1.1` (leave `ios.buildNumber` to EAS's remote
   version source), and update the About version string in `app/App.tsx`. Verify: `grep -n 0.1.1
   app/app.json app/App.tsx` shows both, and `cd app && npm run typecheck` passes.
-- [ ] 1.2 Update the version references in `docs/release-checklist.md` (0.1.0 → 0.1.1). Verify: the
+- [x] 1.2 Update the version references in `docs/release-checklist.md` (0.1.0 → 0.1.1). Verify: the
   doc references 0.1.1 and no longer 0.1.0.
 
 ## 2. Theme gate for the TestFlight build
 
-- [ ] 2.1 Add a `THEMES_ENABLED` flag (in `app/src/theme.ts`, set to `false` for this release) and
+- [x] 2.1 Add a `THEMES_ENABLED` flag (in `app/src/theme.ts`, set to `false` for this release) and
   in `app/App.tsx` force the resolved theme to the Default skin/option and hide the theme list and
   the variant control in Settings when it is off; leave the other skin definitions and assets in
   place so re-enabling is flipping the flag. Verify: with the flag off, the Settings screen shows no
@@ -19,10 +19,10 @@
 
 ## 3. Commit and push
 
-- [ ] 3.1 Stage and commit all pending work (the theme + Live Activity changes, their tests and
+- [x] 3.1 Stage and commit all pending work (the theme + Live Activity changes, their tests and
   assets, the OpenSpec spec updates and archived changes, and this release change) with a descriptive
   message. Verify: `git status --short` is clean.
-- [ ] 3.2 Push `main` to `origin` (github.com/sithartha/opencode-informer). Verify: `git log
+- [x] 3.2 Push `main` to `origin` (github.com/sithartha/opencode-informer). Verify: `git log
   --oneline origin/main -1` matches the new commit.
 
 ## 4. Build and TestFlight
@@ -38,6 +38,11 @@
 
 ## 5. Other components
 
-- [ ] 5.1 Confirm no other component changed: no release is produced for `plugin/`, `mac-helper/`,
-  or `helper/` (the macOS helper stays on `helper-v0.4.0`; the cross-platform helper bins are
-  unchanged). Verify: no pending changes under those paths; state the decision in the summary.
+- [ ] 5.1 Cross-platform helper: run the `helper` workflow (dispatch on `main`), download the
+  Linux/Windows/macOS artifacts, and create the `helper-v0.5.0` GitHub Release with the binaries
+  (unsigned). Verify: the release exists with the three artifacts.
+- [ ] 5.2 macOS helper: bump `mac-helper/Resources/Info.plist` to 0.4.3, run
+  `mac-helper/scripts/release-helper.sh` (Developer ID sign + notarize), and attach the `.dmg` to a
+  GitHub Release. Verify: the release exists with the notarized dmg.
+- [ ] 5.3 Commit the version bumps (mac-helper 0.4.3, any helper docs) and push `main`. Verify:
+  `git status` clean and `origin/main` matches.
