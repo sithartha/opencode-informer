@@ -46,3 +46,10 @@
   GitHub Release. Verify: the release exists with the notarized dmg.
 - [x] 5.3 Commit the version bumps (mac-helper 0.4.3, any helper docs) and push `main`. Verify:
   `git status` clean and `origin/main` matches.
+
+## 6. Agent-local notes
+
+- [x] 6.1 Add `AGENTS.local.md` at the repo root (excluded via `.git/info/exclude`, so it never
+  lands in the repo) describing how releases are done and how to build dev and release locally for
+  every component (app, plugin, mac-helper, helper, contract). Verify: `git check-ignore
+  AGENTS.local.md` reports it and `git status` does not list it.
