@@ -13,6 +13,17 @@ import eva01Img from "../assets/logos/eva01.png"
 import eva02Img from "../assets/logos/eva02.png"
 import boltImg from "../assets/logos/bolt.png"
 import osImg from "../assets/logos/os.png"
+import crestGryffindor from "../assets/logos/crest-gryffindor.png"
+import crestSlytherin from "../assets/logos/crest-slytherin.png"
+import crestRavenclaw from "../assets/logos/crest-ravenclaw.png"
+import crestHufflepuff from "../assets/logos/crest-hufflepuff.png"
+
+const CRESTS: Record<string, number> = {
+  gryffindor: crestGryffindor,
+  slytherin: crestSlytherin,
+  ravenclaw: crestRavenclaw,
+  hufflepuff: crestHufflepuff,
+}
 
 const EVA_HEADS: Record<string, number> = { unit00: eva00Img, unit01: eva01Img, unit02: eva02Img }
 
@@ -33,6 +44,9 @@ export function ThemeMark({ theme, size = 30 }: { theme: Theme; size?: number })
   }
   if (theme.skin === "classic-os") {
     return <Image source={osImg} style={box} resizeMode="contain" />
+  }
+  if (theme.skin === "wizard") {
+    return <Image source={CRESTS[theme.variant ?? "gryffindor"] ?? crestGryffindor} style={box} resizeMode="contain" />
   }
   return <DefaultMark theme={theme} size={size} />
 }

@@ -1,21 +1,34 @@
 import { StatusBar } from "expo-status-bar"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Switch, Text, TextInput, TouchableOpacity, useColorScheme, View, type LayoutChangeEvent } from "react-native"
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, TouchableOpacity, useColorScheme, View, type LayoutChangeEvent } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { useBridge } from "./src/useBridge"
 import { orderSessions, type PendingRequest, type Session } from "./src/events"
 import { aggregate } from "./src/aggregate"
-import { resolveTheme, SKINS, skinDef, THEMES_ENABLED } from "./src/theme"
+import { resolveTheme, SKINS, selectThemeOption, skinDef, type SkinId } from "./src/theme"
 import { createStyles } from "./src/styles"
 import { liveActivity } from "./src/liveActivity"
 import { joinHostPort } from "./src/manualConnect"
 import { CompactHero, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
 import { ThemeMark } from "./src/themeMark"
 import { DemoScreen } from "./src/DemoScreen"
+import { Ionicons } from "@expo/vector-icons"
+import { TIP_IDS, TipStore } from "./src/purchases"
+import { createIapAdapter, initIap } from "./src/iapAdapter"
 import { FadeIn, GlowDot, PressableScale } from "./src/ui"
 
 const APP_DESCRIPTION =
   "OpenCode Informer mirrors your OpenCode agents to this phone: watch their activity, get notified when one needs you, and approve or answer right from the Lock Screen — over your local WiFi and Bluetooth, with no server."
+
+// Humorous copy for the optional tips — the point is that a tip unlocks nothing.
+const TIP_COPY = [
+  { iconName: "cafe-outline" as const, title: "A modest nothing", blurb: "You receive exactly no features. The app stays free either way — thanks for the kindness." },
+  { iconName: "pizza-outline" as const, title: "Three times the nothing", blurb: "Still nothing, but generously tripled. It supports development, which is the whole point." },
+  { iconName: "rocket-outline" as const, title: "The complete nothing", blurb: "The full nothing experience. Unlocks nothing, forever, with style." },
+]
+
+// Three cards fully + half of the next card in the bordered theme list.
+const THEME_GAP = 4
 
 
 export default function App() {
@@ -36,7 +49,6 @@ export default function App() {
     liveActivityEnabled,
     setLiveActivityOn,
     deviceName,
-    setDeviceName,
     skin,
     themeOption,
     setSkin,
@@ -49,11 +61,7 @@ export default function App() {
   } = useBridge()
 
   const systemScheme = useColorScheme()
-  const theme = resolveTheme(
-    THEMES_ENABLED ? skin : "default",
-    THEMES_ENABLED ? themeOption : "system",
-    systemScheme,
-  )
+  const theme = resolveTheme(skin, themeOption, systemScheme)
   const styles = useMemo(() => createStyles(theme), [theme])
 
   // Store the theme before effects run (so the activity starts with the right
@@ -65,16 +73,17 @@ export default function App() {
 
   const [showManual, setShowManual] = useState(false)
   const [manualError, setManualError] = useState<string | null>(null)
-  const [nameDraft, setNameDraft] = useState(deviceName)
   const [showSettings, setShowSettings] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showDemo, setShowDemo] = useState(false)
+  const [tipProducts, setTipProducts] = useState<{ id: string; price: string }[]>([])
+  const [tipError, setTipError] = useState<string | null>(null)
+  const [themesBoxHeight, setThemesBoxHeight] = useState(0)
   const [confirmAction, setConfirmAction] = useState<{ kind: "stop" | "close"; sessionID?: string } | null>(null)
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [switcherSession, setSwitcherSession] = useState<Session | null>(null)
   const [switchOptions, setSwitchOptions] = useState<{ agents: string[]; models: { providerID: string; id: string; name?: string }[] }>({ agents: [], models: [] })
   const [startDraft, setStartDraft] = useState<{ agent?: string; model?: { providerID: string; id: string } } | null>(null)
-  useEffect(() => setNameDraft(deviceName), [deviceName])
 
   const scrollRef = useRef<ScrollView>(null)
   const offsetRef = useRef(0)
@@ -119,7 +128,7 @@ export default function App() {
   const focusField = useCallback((y: number, h: number) => {
     const windowHeight = Dimensions.get("window").height
     const keyboard = keyboardRef.current || 300
-    const visibleBottom = windowHeight - keyboard - 27
+    const visibleBottom = windowHeight - keyboard - 12
     const fieldBottom = y + h
     if (fieldBottom > visibleBottom) {
       scrollRef.current?.scrollTo({ y: offsetRef.current + (fieldBottom - visibleBottom), animated: true })
@@ -173,6 +182,37 @@ export default function App() {
 
   const statusColor =
     connection.status === "connected" ? theme.allow : connection.status === "disconnected" ? theme.deny : theme.accent
+
+  const tipStore = useRef(new TipStore(createIapAdapter())).current
+  useEffect(() => {
+    void initIap()
+    void tipStore
+      .load()
+      .then((products) => setTipProducts(products.map((product) => ({ id: product.id, price: product.price }))))
+      .catch(() => undefined)
+  }, [tipStore])
+
+  const tips = TIP_IDS.map((id, index) => ({
+    id,
+    price: tipProducts.find((product) => product.id === id)?.price ?? ["$0.99", "$2.99", "$5.99"][index],
+    iconName: TIP_COPY[index].iconName,
+    title: TIP_COPY[index].title,
+    blurb: TIP_COPY[index].blurb,
+    recommended: index === 1,
+  }))
+  // Three cards fully + half a card: cardHeight = (boxHeight - gaps) / 3.5.
+  const themeCardHeight = themesBoxHeight > 0 ? (themesBoxHeight - THEME_GAP * 3) / 3.5 : 84
+
+  const selectTheme = (next: SkinId) => {
+    void setSkin(next)
+    void setThemeOption(selectThemeOption(next, systemScheme))
+  }
+  const buyTip = (id: string) => {
+    setTipError(null)
+    void tipStore.buy(id).then((result) => {
+      if (result.status === "error") setTipError(result.error ?? "Purchase failed.")
+    })
+  }
 
   return (
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
@@ -293,55 +333,59 @@ export default function App() {
               </PressableScale>
             </View>
 
-            {THEMES_ENABLED ? (
-              <>
             <Text style={styles.section}>Appearance</Text>
             <Text style={styles.fieldLabel}>Theme</Text>
-            {SKINS.map((entry) => {
-              // Preview follows the current light/dark: skins with a System option resolve it,
-              // otherwise pick the variant that matches the current scheme.
-              const preview = entry.options.some((o) => o.id === "system")
-                ? entry.resolve("system", theme.dark ? "dark" : "light")
-                : entry.resolve((entry.options.find((o) => entry.resolve(o.id, systemScheme).dark === theme.dark) ?? entry.options[0]).id, systemScheme)
-              const previewStyles = createStyles(preview)
-              const selected = skin === entry.id
-              return (
-                <TouchableOpacity
-                  key={entry.id}
-                  style={[styles.themeCard, selected ? styles.themeCardSelected : null]}
-                  onPress={() => void setSkin(entry.id)}
-                  activeOpacity={0.85}
-                  accessibilityLabel={`Theme ${entry.name}`}
-                >
-                  <View style={styles.themeCardMain}>
-                    <Text style={styles.themeCardText}>{entry.name}</Text>
-                    <Text style={styles.themeCardDesc}>{entry.description}</Text>
-                  </View>
-                  <View style={styles.themeCardRight}>
-                    <LinearGradient
-                      colors={preview.bgGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={[previewStyles.themePreview, { borderColor: preview.border }]}
+            <View
+              onLayout={(event) => setThemesBoxHeight(event.nativeEvent.layout.height)}
+              style={[styles.themesFrame, { borderColor: theme.border }]}
+            >
+              <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled contentContainerStyle={{ gap: THEME_GAP }}>
+                {SKINS.map((entry) => {
+                  const preview = entry.options.some((o) => o.id === "system")
+                    ? entry.resolve("system", theme.dark ? "dark" : "light")
+                    : entry.resolve((entry.options.find((o) => entry.resolve(o.id, systemScheme).dark === theme.dark) ?? entry.options[0]).id, systemScheme)
+                  const selected = skin === entry.id
+                  return (
+                    <TouchableOpacity
+                      key={entry.id}
+                      style={[styles.themeCard, { height: themeCardHeight }, selected ? styles.themeCardSelected : null]}
+                      onPress={() => selectTheme(entry.id)}
+                      activeOpacity={0.85}
+                      accessibilityLabel={`Theme ${entry.name}`}
                     >
-                      <View style={[previewStyles.themePreviewCard, { backgroundColor: preview.surface, borderColor: preview.border }]}>
-                        <View style={[previewStyles.themePreviewLine, { backgroundColor: preview.accent }]} />
-                        <View style={[previewStyles.themePreviewLine, { width: 16, backgroundColor: preview.textSecondary }]} />
-                        <View style={[previewStyles.themePreviewAccent, { backgroundColor: preview.accent }]} />
+                      <View style={styles.themeCardMain}>
+                        <Text style={styles.themeCardText} numberOfLines={1}>{entry.name}</Text>
+                        {entry.description.split(" · ").map((line, index) => (
+                          <Text key={index} style={styles.themeCardDesc} numberOfLines={1}>{line}</Text>
+                        ))}
                       </View>
-                    </LinearGradient>
-                    {selected ? <Text style={styles.switcherCheck}>✓</Text> : null}
-                  </View>
-                </TouchableOpacity>
-              )
-            })}
+                      <View style={styles.themeCardRight}>
+                        <LinearGradient
+                          colors={preview.bgGradient}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={[styles.themePreview, { borderColor: preview.border }]}
+                        >
+                          <View style={[styles.themePreviewCard, { backgroundColor: preview.surface, borderColor: preview.border }]}>
+                            <View style={[styles.themePreviewLine, { backgroundColor: preview.accent }]} />
+                            <View style={[styles.themePreviewLine, { width: 16, backgroundColor: preview.textSecondary }]} />
+                            <View style={[styles.themePreviewAccent, { backgroundColor: preview.accent }]} />
+                          </View>
+                        </LinearGradient>
+                        {selected ? <Text style={styles.switcherCheck}>✓</Text> : null}
+                      </View>
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+            </View>
             <Text style={styles.fieldLabel}>{skin === "evangelion" ? "Unit" : skin === "tunes" || skin === "classic-os" ? "Look" : "Appearance"}</Text>
             <View style={styles.segment}>
               {skinDef(skin).options.map((option) => {
-                const selected = themeOption === option.id
+                const active = themeOption === option.id
                 return (
                   <TouchableOpacity key={option.id} style={styles.segmentItem} onPress={() => void setThemeOption(option.id)} activeOpacity={0.8}>
-                    {selected ? (
+                    {active ? (
                       <LinearGradient colors={theme.accentGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.segmentSelected}>
                         <Text style={styles.segmentTextSelected}>{option.name}</Text>
                       </LinearGradient>
@@ -363,8 +407,31 @@ export default function App() {
                     ? "Classic desktop interface — the blue look or a dark counterpart."
                     : "Light, Dark, or follow your iPhone's setting."}
             </Text>
-              </>
-            ) : null}
+
+            <Text style={styles.section}>Support development</Text>
+            <Text style={styles.fieldDescription}>
+              The app is free and there are no plans to charge. Tips are optional — and, honestly, you get nothing for them.
+            </Text>
+            <View style={styles.tipsWrap}>
+              {tips.map((tip) => (
+                <View key={tip.id} style={[styles.tipCard, tip.recommended ? styles.tipCardRecommended : null]}>
+                  <Ionicons name={tip.iconName} size={26} color={theme.accent} />
+                  <View style={styles.tipCardText}>
+                    <Text style={styles.tipCardTitle}>{tip.title}</Text>
+                    <Text style={styles.tipCardBlurb}>{tip.blurb}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => buyTip(tip.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Buy tip ${tip.price}`}
+                    style={[styles.tipBuyBtn, tip.recommended ? styles.tipBuyBtnFilled : null]}
+                  >
+                    <Text style={[styles.tipCardPrice, tip.recommended ? { color: "#ffffff" } : null]}>{tip.price}</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+            {tipError ? <Text style={styles.error}>{tipError}</Text> : null}
 
             <Text style={styles.section}>Connection</Text>
             <View style={styles.settingRow}>
@@ -374,19 +441,9 @@ export default function App() {
 
             <Text style={styles.section}>This phone</Text>
             <Text style={styles.fieldLabel}>Device name</Text>
-            <TextInput
-              style={styles.inputFull}
-              value={nameDraft}
-              onChangeText={setNameDraft}
-              onEndEditing={() => void setDeviceName(nameDraft.trim() || "iPhone")}
-              autoCapitalize="words"
-              autoCorrect={false}
-              placeholder="e.g. sithPhone"
-              placeholderTextColor={theme.textMuted}
-            />
+            <Text style={styles.about}>{deviceName}</Text>
             <Text style={styles.fieldDescription}>
-              The name the Mac shows when this phone asks to pair. iOS hides the system name unless the app has the
-              device-name entitlement, so set your own here.
+              The name the Mac shows when this phone pairs — taken from iOS.
             </Text>
 
             <Text style={styles.section}>Diagnostics</Text>

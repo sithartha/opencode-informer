@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react"
-import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle } from "react-native"
+import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import type { PendingRequest, QuestionOption, Session } from "./events"
 import { optionValue } from "./events"
@@ -19,6 +19,27 @@ export const PHASE_COLORS: Record<string, string> = {
 }
 
 export type Resolve = (id: string, action: string, answers?: Record<string, string>) => void
+
+/** A regular hexagon (flat top/bottom, pointy left/right), built from three views. */
+export function Hexagon({ size = 30, color, style, children }: { size?: number; color: string; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
+  const rectWidth = Math.round(size * 0.58)
+  const triangleWidth = Math.round(size * 0.29)
+  const cap: ViewStyle = {
+    width: 0,
+    height: 0,
+    borderTopWidth: size / 2,
+    borderBottomWidth: size / 2,
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+  }
+  return (
+    <View style={[{ flexDirection: "row", alignItems: "center" }, style]}>
+      <View style={[cap, { borderRightWidth: triangleWidth, borderRightColor: color }]} />
+      <View style={{ width: rectWidth, height: size, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>{children}</View>
+      <View style={[cap, { borderLeftWidth: triangleWidth, borderLeftColor: color }]} />
+    </View>
+  )
+}
 
 export function BrandMark({ theme }: { theme: Theme }) {
   return (
@@ -58,7 +79,13 @@ export function InlineInput({
   textColor?: string
 }) {
   const [text, setText] = useState("")
+  const [focused, setFocused] = useState(false)
   const inputRef = useRef<TextInput>(null)
+  const scheduleFocus = () => {
+    if (!onFieldFocus) return
+    // Re-measure after the layout settles (keyboard, multiline growth).
+    setTimeout(() => inputRef.current?.measureInWindow?.((_x, y, _w, h) => onFieldFocus(y, h)), 120)
+  }
   const submit = () => {
     const value = text.trim()
     if (!value) return
@@ -82,9 +109,15 @@ export function InlineInput({
         placeholder={placeholder}
         placeholderTextColor={theme.textMuted}
         onFocus={() => {
+          setFocused(true)
           if (!onFieldFocus) return
           // Let the keyboard/layout settle before measuring the field.
           setTimeout(() => inputRef.current?.measureInWindow?.((_x, y, _w, h) => onFieldFocus(y, h)), 250)
+        }}
+        onBlur={() => setFocused(false)}
+        onContentSizeChange={() => {
+          // Keep the field just above the keyboard as it grows.
+          if (focused) scheduleFocus()
         }}
         accessibilityLabel={placeholder}
       />
@@ -348,6 +381,7 @@ export function HeroCard({
   const isSanrio = theme.skin === "sanrio"
   const isTunes = theme.skin === "tunes"
   const isClassicOS = theme.skin === "classic-os"
+  const isWizard = theme.skin === "wizard"
   const unit = theme.variant === "unit00" ? "00" : theme.variant === "unit02" ? "02" : "01"
   // MAGI cores: the three supercomputer brains mapped to the attention states.
   const cores = [
@@ -416,9 +450,10 @@ export function HeroCard({
             <View style={styles.magiCores}>
               {cores.map((core) => (
                 <View key={core.label} style={styles.magiCore}>
-                  <View style={[styles.magiTriangle, { borderBottomColor: core.color, opacity: core.active ? 1 : 0.28 }]} />
+                  <Hexagon size={30} color={core.color} style={{ opacity: core.active ? 1 : 0.28 }}>
+                    <Text style={styles.magiHexCount}>{core.count}</Text>
+                  </Hexagon>
                   <Text style={styles.magiCoreLabel}>{core.label}</Text>
-                  <Text style={styles.magiCoreCount}>{core.count}</Text>
                 </View>
               ))}
             </View>
@@ -468,6 +503,17 @@ export function HeroCard({
             </View>
           </>
         ) : null}
+        {isWizard ? (
+          <>
+            <View style={styles.swHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <ThemeMark theme={theme} size={18} />
+                <Text style={styles.swFaction}>{(theme.variant ?? "gryffindor").toUpperCase()}</Text>
+              </View>
+              <Text style={styles.swStatus}>{hasAttention ? "ALERT" : idle ? "IDLE" : "READY"}</Text>
+            </View>
+          </>
+        ) : null}
         {hasAttention ? (
           <>
             <Text style={styles.heroCount}>{needsYou}</Text>
@@ -492,27 +538,21 @@ export function HeroCard({
             <View style={{ width: "100%", marginTop: 2 }}>
               <TelemetryBars color={theme.accent} height={14} count={26} />
             </View>
-            <View style={styles.nervReadout}>
-            <View style={styles.nervReadoutItem}>
-              <Text style={styles.nervReadoutLabel}>RUN</Text>
-              <Text style={[styles.nervReadoutValue, { color: agg.running > 0 ? theme.accent : theme.textMuted }]}>{agg.running}</Text>
-            </View>
-            <View style={styles.nervReadoutItem}>
-              <Text style={styles.nervReadoutLabel}>PRM</Text>
-              <Text style={[styles.nervReadoutValue, { color: agg.waitingApproval > 0 ? theme.accent : theme.textMuted }]}>{agg.waitingApproval}</Text>
-            </View>
-            <View style={styles.nervReadoutItem}>
-              <Text style={styles.nervReadoutLabel}>QST</Text>
-              <Text style={[styles.nervReadoutValue, { color: agg.waitingAnswer > 0 ? theme.accent : theme.textMuted }]}>{agg.waitingAnswer}</Text>
-            </View>
-            <View style={styles.nervReadoutItem}>
-              <Text style={styles.nervReadoutLabel}>INA</Text>
-              <Text style={[styles.nervReadoutValue, { color: theme.textMuted }]}>{agg.stopped}</Text>
-            </View>
-            <View style={styles.nervReadoutItem}>
-              <Text style={styles.nervReadoutLabel}>TOT</Text>
-              <Text style={[styles.nervReadoutValue, { color: theme.textMuted }]}>{agg.total}</Text>
-            </View>
+            <View style={styles.magiCores}>
+              {[
+                { label: "RUN", count: agg.running, active: agg.running > 0 },
+                { label: "PRM", count: agg.waitingApproval, active: agg.waitingApproval > 0 },
+                { label: "QST", count: agg.waitingAnswer, active: agg.waitingAnswer > 0 },
+                { label: "INA", count: agg.stopped, active: false },
+                { label: "TOT", count: agg.total, active: false },
+              ].map((item) => (
+                <View key={item.label} style={styles.magiCore}>
+                  <Hexagon size={34} color={item.active ? theme.accent : theme.border}>
+                    <Text style={[styles.magiHexCount, { color: item.active ? "#ffffff" : theme.textMuted }]}>{item.count}</Text>
+                  </Hexagon>
+                  <Text style={styles.magiCoreLabel}>{item.label}</Text>
+                </View>
+              ))}
             </View>
           </>
         ) : isSanrio ? (

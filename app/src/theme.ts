@@ -1,11 +1,12 @@
-export type SkinId = "default" | "evangelion" | "sanrio" | "starwars" | "tunes" | "classic-os"
+export type SkinId = "default" | "evangelion" | "sanrio" | "starwars" | "tunes" | "classic-os" | "wizard"
 export type DefaultMode = "light" | "dark" | "system"
 export type UnitId = "unit00" | "unit01" | "unit02"
 export type SanrioId = "kitty" | "chococat"
 export type StarWarsId = "sith" | "jedi"
 export type TunesId = "classic" | "bento"
 export type ClassicOSId = "blue" | "dark"
-export type ThemeOption = DefaultMode | UnitId | SanrioId | StarWarsId | TunesId | ClassicOSId
+export type WizardId = "gryffindor" | "slytherin" | "ravenclaw" | "hufflepuff"
+export type ThemeOption = DefaultMode | UnitId | SanrioId | StarWarsId | TunesId | ClassicOSId | WizardId
 
 export interface Theme {
   skin: SkinId
@@ -142,33 +143,33 @@ const unit00: Theme = {
   text: "#0a1626",
   textSecondary: "#46566b",
   textMuted: "#7d8ba0",
-  accent: "#2563eb",
-  secondaryAccent: "#60a5fa",
+  accent: "#f2b705",
+  secondaryAccent: "#3fa34d",
   allow: "#0f9d58",
   deny: "#d93025",
-  option: "#2563eb",
+  option: "#e0a800",
   pendingBg: "#fff8ee",
   pendingBorder: "#ffd9a0",
   pendingTitle: "#8a4b0a",
   pendingBody: "#7a4a12",
-  badgeBg: "#e4ecf6",
-  badgeText: "#33465c",
+  badgeBg: "#eef1e4",
+  badgeText: "#45503a",
   inputBg: "#ffffff",
   inputBorder: "#c3d1e2",
   error: "#d93025",
-  shadow: "rgba(12,32,64,0.12)",
-  scrim: "rgba(8,20,40,0.44)",
-  bgGradient: ["#f6f9fd", "#e6eef8"],
-  cardBorder: ["#ffffff", "#d3e0f0"],
-  accentGradient: ["#3b82f6", "#1d4ed8"],
-  glow: "rgba(37,99,235,0.30)",
-  questionBorder: ["#60a5fa", "#2563eb"],
-  questionGlow: "rgba(37,99,235,0.36)",
-  questionBgGradient: ["rgba(37,99,235,0.07)", "rgba(29,78,216,0.03)"],
-  questionText: "#1e3a8a",
-  permissionBorder: ["#fbbf24", "#f59e0b"],
-  permissionGlow: "rgba(245,158,11,0.36)",
-  permissionBgGradient: ["rgba(245,158,11,0.10)", "rgba(217,119,6,0.03)"],
+  shadow: "rgba(64,48,12,0.12)",
+  scrim: "rgba(34,26,8,0.44)",
+  bgGradient: ["#fbf9f2", "#f1eee2"],
+  cardBorder: ["#ffffff", "#e6e0cf"],
+  accentGradient: ["#f7c948", "#d99a00"],
+  glow: "rgba(242,183,5,0.30)",
+  questionBorder: ["#ffd23f", "#e0a800"],
+  questionGlow: "rgba(242,183,5,0.36)",
+  questionBgGradient: ["rgba(242,183,5,0.08)", "rgba(63,163,77,0.03)"],
+  questionText: "#8a5a00",
+  permissionBorder: ["#f0a70a", "#d97706"],
+  permissionGlow: "rgba(217,119,6,0.36)",
+  permissionBgGradient: ["rgba(240,167,10,0.10)", "rgba(217,119,6,0.03)"],
   permissionText: "#8a4b0a",
 }
 
@@ -580,6 +581,168 @@ const classicOSDark: Theme = {
   permissionText: "#ffe0a0",
 }
 
+// --- Wizard skin: four house palettes (rounded), System resolves to Ravenclaw ---
+
+const gryffindor: Theme = {
+  skin: "wizard",
+  variant: "gryffindor",
+  dark: false,
+  background: "#faf3ec",
+  surface: "#ffffff",
+  border: "#e7d3bf",
+  text: "#3a1c12",
+  textSecondary: "#7a4a3a",
+  textMuted: "#a3826f",
+  accent: "#ae0001",
+  secondaryAccent: "#d3a625",
+  allow: "#2e9b23",
+  deny: "#ae0001",
+  option: "#ae0001",
+  pendingBg: "#fff8ee",
+  pendingBorder: "#ffd9a0",
+  pendingTitle: "#8a4b0a",
+  pendingBody: "#7a4a12",
+  badgeBg: "#f6e7d8",
+  badgeText: "#6b3f2f",
+  inputBg: "#ffffff",
+  inputBorder: "#e2cdb8",
+  error: "#ae0001",
+  shadow: "rgba(80,30,10,0.14)",
+  scrim: "rgba(60,20,10,0.44)",
+  bgGradient: ["#fdf6f0", "#f6e9dc"],
+  cardBorder: ["#ffffff", "#e7d3bf"],
+  accentGradient: ["#d02020", "#8c0000"],
+  glow: "rgba(174,0,1,0.30)",
+  questionBorder: ["#e07a5f", "#ae0001"],
+  questionGlow: "rgba(174,0,1,0.36)",
+  questionBgGradient: ["rgba(174,0,1,0.06)", "rgba(211,166,37,0.03)"],
+  questionText: "#7a1a10",
+  permissionBorder: ["#f0c14b", "#d3a625"],
+  permissionGlow: "rgba(211,166,37,0.36)",
+  permissionBgGradient: ["rgba(240,193,75,0.12)", "rgba(211,166,37,0.03)"],
+  permissionText: "#7a5a10",
+}
+
+const slytherin: Theme = {
+  skin: "wizard",
+  variant: "slytherin",
+  dark: true,
+  background: "#0a1410",
+  surface: "#12211a",
+  border: "#24463a",
+  text: "#e6f2ec",
+  textSecondary: "#a7c3b6",
+  textMuted: "#6f8a7d",
+  accent: "#2a9d5c",
+  secondaryAccent: "#c0c4c8",
+  allow: "#4ade80",
+  deny: "#ff5c5c",
+  option: "#2a9d5c",
+  pendingBg: "#241a04",
+  pendingBorder: "#6b4a10",
+  pendingTitle: "#ffcf8f",
+  pendingBody: "#e8c9a0",
+  badgeBg: "#173026",
+  badgeText: "#c8e0d4",
+  inputBg: "#142a20",
+  inputBorder: "#2a4a3c",
+  error: "#ff6b6b",
+  shadow: "rgba(0,0,0,0.55)",
+  scrim: "rgba(3,10,7,0.66)",
+  bgGradient: ["#0c1a14", "#0a1410"],
+  cardBorder: ["#24463a", "#101d17"],
+  accentGradient: ["#3fbf76", "#1c7a46"],
+  glow: "rgba(42,157,92,0.42)",
+  questionBorder: ["#3fbf76", "#c0c4c8"],
+  questionGlow: "rgba(42,157,92,0.5)",
+  questionBgGradient: ["rgba(42,157,92,0.12)", "rgba(192,196,200,0.05)"],
+  questionText: "#bff0d4",
+  permissionBorder: ["#f0c14b", "#c0c4c8"],
+  permissionGlow: "rgba(192,196,200,0.4)",
+  permissionBgGradient: ["rgba(240,193,75,0.10)", "rgba(192,196,200,0.04)"],
+  permissionText: "#ffe0a0",
+}
+
+const ravenclaw: Theme = {
+  skin: "wizard",
+  variant: "ravenclaw",
+  dark: false,
+  background: "#eef1f7",
+  surface: "#ffffff",
+  border: "#cbd3e2",
+  text: "#0e1730",
+  textSecondary: "#46506b",
+  textMuted: "#7d87a0",
+  accent: "#35508c",
+  secondaryAccent: "#946b2d",
+  allow: "#2e9b23",
+  deny: "#ae0001",
+  option: "#35508c",
+  pendingBg: "#fff8ee",
+  pendingBorder: "#ffd9a0",
+  pendingTitle: "#8a4b0a",
+  pendingBody: "#7a4a12",
+  badgeBg: "#e4e9f4",
+  badgeText: "#33415c",
+  inputBg: "#ffffff",
+  inputBorder: "#c3cddf",
+  error: "#ae0001",
+  shadow: "rgba(20,30,60,0.14)",
+  scrim: "rgba(12,20,40,0.44)",
+  bgGradient: ["#f6f8fc", "#e7ebf4"],
+  cardBorder: ["#ffffff", "#d3dae8"],
+  accentGradient: ["#4a66a8", "#263a66"],
+  glow: "rgba(53,80,140,0.30)",
+  questionBorder: ["#6d86c0", "#35508c"],
+  questionGlow: "rgba(53,80,140,0.36)",
+  questionBgGradient: ["rgba(53,80,140,0.07)", "rgba(148,107,45,0.03)"],
+  questionText: "#263a66",
+  permissionBorder: ["#c9a35a", "#946b2d"],
+  permissionGlow: "rgba(148,107,45,0.36)",
+  permissionBgGradient: ["rgba(201,163,90,0.12)", "rgba(148,107,45,0.03)"],
+  permissionText: "#6b4a1a",
+}
+
+const hufflepuff: Theme = {
+  skin: "wizard",
+  variant: "hufflepuff",
+  dark: false,
+  background: "#fbf7ea",
+  surface: "#ffffff",
+  border: "#e7ddc0",
+  text: "#2e2a1c",
+  textSecondary: "#6b6349",
+  textMuted: "#a0937a",
+  accent: "#e0a800",
+  secondaryAccent: "#372e29",
+  allow: "#2e9b23",
+  deny: "#ae0001",
+  option: "#e0a800",
+  pendingBg: "#fff8ee",
+  pendingBorder: "#ffd9a0",
+  pendingTitle: "#8a4b0a",
+  pendingBody: "#7a4a12",
+  badgeBg: "#f4ecd4",
+  badgeText: "#5c5233",
+  inputBg: "#ffffff",
+  inputBorder: "#e2d7b8",
+  error: "#ae0001",
+  shadow: "rgba(60,50,10,0.14)",
+  scrim: "rgba(40,34,10,0.44)",
+  bgGradient: ["#fdfaef", "#f6f0dc"],
+  cardBorder: ["#ffffff", "#e7ddc0"],
+  accentGradient: ["#f2c33f", "#c98a00"],
+  glow: "rgba(224,168,0,0.30)",
+  questionBorder: ["#f2c33f", "#e0a800"],
+  questionGlow: "rgba(224,168,0,0.36)",
+  questionBgGradient: ["rgba(224,168,0,0.08)", "rgba(55,46,41,0.03)"],
+  questionText: "#7a5a00",
+  permissionBorder: ["#8a7a55", "#372e29"],
+  permissionGlow: "rgba(55,46,41,0.36)",
+  permissionBgGradient: ["rgba(138,122,85,0.10)", "rgba(55,46,41,0.03)"],
+  permissionText: "#4a3f2a",
+}
+
 export interface SkinDef {
   id: SkinId
   name: string
@@ -667,20 +830,27 @@ export const SKINS: SkinDef[] = [
     resolve: (option, systemScheme) =>
       option === "dark" ? classicOSDark : option === "system" ? (systemScheme === "dark" ? classicOSDark : classicOSBlue) : classicOSBlue,
   },
+  {
+    id: "wizard",
+    name: "Wizard",
+    description: "House palette · 4 houses + System",
+    options: [
+      { id: "gryffindor", name: "Gryffindor" },
+      { id: "slytherin", name: "Slytherin" },
+      { id: "ravenclaw", name: "Ravenclaw" },
+      { id: "hufflepuff", name: "Hufflepuff" },
+    ],
+    defaultOption: "gryffindor",
+    resolve: (option) =>
+      option === "gryffindor" ? gryffindor : option === "slytherin" ? slytherin : option === "hufflepuff" ? hufflepuff : ravenclaw,
+  },
 ]
 
 export const DEFAULT_SKIN: SkinId = "default"
 export const DEFAULT_OPTION: ThemeOption = "system"
 
-/**
- * Whether the interface theme picker is available. Disabled for the TestFlight
- * build so it ships with only the Default theme; the other skins stay in the
- * catalog, and re-enabling is flipping this flag.
- */
-export const THEMES_ENABLED = false
-
 export function isSkinId(value: unknown): value is SkinId {
-  return value === "default" || value === "evangelion" || value === "sanrio" || value === "starwars" || value === "tunes" || value === "classic-os"
+  return value === "default" || value === "evangelion" || value === "sanrio" || value === "starwars" || value === "tunes" || value === "classic-os" || value === "wizard"
 }
 
 export function skinDef(id: SkinId): SkinDef {
@@ -689,6 +859,18 @@ export function skinDef(id: SkinId): SkinDef {
 
 export function defaultOptionFor(skin: SkinId): ThemeOption {
   return skinDef(skin).defaultOption
+}
+
+/**
+ * The variant to select when the user switches to a theme: its System option when it
+ * has one, otherwise the skin's default (the Nerv skin has no System, so it uses
+ * Unit 01). The Wizard skin has no System option either — switching picks the house
+ * that matches the iPhone's setting (light → Gryffindor, dark → Slytherin).
+ */
+export function selectThemeOption(skin: SkinId, systemScheme?: string | null): ThemeOption {
+  if (skin === "wizard") return systemScheme === "dark" ? "slytherin" : "gryffindor"
+  const def = skinDef(skin)
+  return def.options.some((option) => option.id === "system") ? "system" : def.defaultOption
 }
 
 export function resolveTheme(skin: string | null | undefined, option: string | null | undefined, systemScheme?: string | null): Theme {

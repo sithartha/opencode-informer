@@ -10,17 +10,28 @@ import {
   markTint,
   migrateStoredTheme,
   resolveTheme,
+  selectThemeOption,
   skinDef,
 } from "../src/theme"
 
 test("the catalog exposes the skins", () => {
-  assert.deepEqual(SKINS.map((skin) => skin.id), ["default", "evangelion", "sanrio", "starwars", "tunes", "classic-os"])
+  assert.deepEqual(SKINS.map((skin) => skin.id), ["default", "evangelion", "sanrio", "starwars", "tunes", "classic-os", "wizard"])
   assert.deepEqual(skinDef("default").options.map((option) => option.id), ["light", "dark", "system"])
   assert.deepEqual(skinDef("evangelion").options.map((option) => option.id), ["unit00", "unit01", "unit02"])
   assert.deepEqual(skinDef("sanrio").options.map((option) => option.id), ["kitty", "chococat", "system"])
   assert.deepEqual(skinDef("starwars").options.map((option) => option.id), ["sith", "jedi", "system"])
   assert.deepEqual(skinDef("tunes").options.map((option) => option.id), ["classic", "bento", "system"])
   assert.deepEqual(skinDef("classic-os").options.map((option) => option.id), ["blue", "dark", "system"])
+  assert.deepEqual(skinDef("wizard").options.map((option) => option.id), ["gryffindor", "slytherin", "ravenclaw", "hufflepuff"])
+})
+
+test("the wizard theme resolves its houses", () => {
+  assert.equal(resolveTheme("wizard", "gryffindor").variant, "gryffindor")
+  assert.equal(resolveTheme("wizard", "slytherin").variant, "slytherin")
+  assert.equal(resolveTheme("wizard", "ravenclaw").variant, "ravenclaw")
+  assert.equal(resolveTheme("wizard", "hufflepuff").variant, "hufflepuff")
+  // No System option: an unknown option falls back to the default.
+  assert.equal(resolveTheme("wizard", "system").variant, "gryffindor")
 })
 
 test("the tunes and classic os variants resolve to their palettes", () => {
@@ -63,11 +74,23 @@ test("resolveTheme resolves per skin and follows the system scheme", () => {
   assert.equal(resolveTheme("bogus", "light").skin, "default")
 })
 
+test("switching a theme selects its System variant, and Nerv falls back to Unit 01", () => {
+  assert.equal(selectThemeOption("default"), "system")
+  assert.equal(selectThemeOption("sanrio"), "system")
+  assert.equal(selectThemeOption("starwars"), "system")
+  assert.equal(selectThemeOption("tunes"), "system")
+  assert.equal(selectThemeOption("classic-os"), "system")
+  assert.equal(selectThemeOption("evangelion"), "unit01")
+  assert.equal(selectThemeOption("wizard", "light"), "gryffindor")
+  assert.equal(selectThemeOption("wizard", "dark"), "slytherin")
+})
+
 test("skin defaults", () => {
   assert.equal(defaultOptionFor("default"), "system")
   assert.equal(defaultOptionFor("evangelion"), "unit01")
   assert.equal(defaultOptionFor("tunes"), "classic")
   assert.equal(defaultOptionFor("classic-os"), "blue")
+  assert.equal(defaultOptionFor("wizard"), "gryffindor")
   assert.equal(DEFAULT_SKIN, "default")
   assert.equal(DEFAULT_OPTION, "system")
 })
@@ -84,6 +107,7 @@ test("isSkinId accepts only known skins", () => {
   assert.equal(isSkinId("evangelion"), true)
   assert.equal(isSkinId("tunes"), true)
   assert.equal(isSkinId("classic-os"), true)
+  assert.equal(isSkinId("wizard"), true)
   assert.equal(isSkinId("unit01"), false)
 })
 
@@ -102,7 +126,8 @@ test("theme names are renamed and de-trademarked", () => {
   assert.equal(skinDef("starwars").name, "The Force")
   assert.equal(skinDef("tunes").name, "Tunes")
   assert.equal(skinDef("classic-os").name, "Classic OS")
-  const banned = /evangelion|hello kitty|chococat|sanrio|star wars|sith|jedi|winamp|windows|luna|bento/i
+  assert.equal(skinDef("wizard").name, "Wizard")
+  const banned = /evangelion|hello kitty|chococat|sanrio|star wars|sith|jedi|winamp|windows|luna|bento|harry|potter|gryffindor|slytherin|ravenclaw|hufflepuff|hogwarts/i
   for (const skin of SKINS) {
     assert.doesNotMatch(skin.name, banned, `${skin.id} name`)
     assert.doesNotMatch(skin.description, banned, `${skin.id} description`)

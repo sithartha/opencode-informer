@@ -10,14 +10,12 @@ import { BleClient } from "./bleClient"
 import { BridgeStream } from "./sse"
 import {
   clearLastAddress,
-  getDeviceName,
   getLastHost,
   getLastPort,
   getLiveActivityEnabled,
   getTheme,
   readSecure,
   secureTokenStore,
-  setDeviceName as persistDeviceName,
   setLastHost,
   setLastPort,
   setLiveActivityEnabled,
@@ -52,7 +50,7 @@ export function useBridge() {
   const [connection, dispatch] = useReducer(connectionReducer, initialConnection)
   const [paired, setPaired] = useState(false)
   const [liveActivityEnabled, setLiveActivityEnabledState] = useState(true)
-  const [deviceName, setDeviceNameState] = useState(Constants.deviceName || "iPhone")
+  const deviceName = Constants.deviceName || "iPhone"
   const [skin, setSkinState] = useState<SkinId>(DEFAULT_SKIN)
   const [themeOption, setThemeOptionState] = useState<ThemeOption>(DEFAULT_OPTION)
   const [pairingCodeRequest, setPairingCodeRequest] = useState<string | null>(null)
@@ -74,7 +72,6 @@ export function useBridge() {
       }),
     [],
   )
-  const deviceNameRef = useRef(Constants.deviceName || "iPhone")
 
   const bleRef = useRef<BleClient | null>(null)
   const streamRef = useRef<BridgeStream | null>(null)
@@ -313,7 +310,7 @@ export function useBridge() {
       // A new pairing needs the code shown on the Mac.
       if (!code) return "needs-code"
 
-      const first = await beginPairing(base, deviceNameRef.current, code)
+      const first = await beginPairing(base, deviceName, code)
       if (first.status === "invalid-code") throw new Error("invalid pairing code")
       if (first.status === "locked-out") throw new Error("too many attempts")
       if (first.status === "denied") throw new Error("pairing denied")
@@ -475,12 +472,6 @@ export function useBridge() {
     setManuallyDisconnected(true)
     setAppState(emptyState())
     dispatch({ type: "reset" })
-  }, [])
-
-  const setDeviceName = useCallback(async (name: string) => {
-    deviceNameRef.current = name
-    setDeviceNameState(name)
-    await persistDeviceName(name)
   }, [])
 
   const setSkin = useCallback(async (next: SkinId) => {
@@ -740,17 +731,6 @@ export function useBridge() {
       liveActivity.setEnabled(enabled)
     })
 
-    void getDeviceName().then((name) => {
-      // Prefer the real device name; a stored name only fills in when the system
-      // name is unavailable (e.g., the entitlement is missing).
-      const realName = Constants.deviceName || ""
-      const hasRealName = realName.length > 0 && realName !== "iPhone"
-      if (name && !hasRealName) {
-        deviceNameRef.current = name
-        setDeviceNameState(name)
-      }
-    })
-
     void getTheme().then(({ skin: loadedSkin, option }) => {
       setSkinState(loadedSkin)
       setThemeOptionState(option)
@@ -763,5 +743,5 @@ export function useBridge() {
     }
   }, [connect, connectManual, connectRemembered, resolve, refresh])
 
-  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, setDeviceName, skin, themeOption, setSkin, setThemeOption, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
+  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, skin, themeOption, setSkin, setThemeOption, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
 }

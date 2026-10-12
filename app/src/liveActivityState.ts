@@ -50,6 +50,8 @@ export function activityMark(theme: Theme | null): string {
       return theme.dark ? "mark-bolt-gold" : "mark-bolt-orange"
     case "classic-os":
       return "mark-os"
+    case "wizard":
+      return `mark-crest-${theme.variant ?? "gryffindor"}`
     default:
       return "oi"
   }
@@ -68,6 +70,8 @@ export function activityLabel(theme: Theme | null): string {
       return theme.dark ? "TUNES CLASSIC" : "TUNES BENTO"
     case "classic-os":
       return "CLASSIC OS"
+    case "wizard":
+      return (theme.variant ?? "gryffindor").toUpperCase()
     default:
       return ""
   }
@@ -88,6 +92,8 @@ export function activityStatus(theme: Theme | null, agg: Aggregate): string {
       return attention ? "NEEDS YOU" : idle ? "STOPPED" : "PLAYING"
     case "classic-os":
       return attention ? "NEEDS YOU" : idle ? "IDLE" : "ACTIVE"
+    case "wizard":
+      return attention ? "ALERT" : idle ? "IDLE" : "READY"
     default:
       return attention ? "NEEDS YOU" : idle ? "IDLE" : "ALL CLEAR"
   }

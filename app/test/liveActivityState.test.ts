@@ -70,6 +70,8 @@ test("tunes and classic os use their own Live Activity marks", () => {
   assert.equal(activityMark(resolveTheme("tunes", "classic")), "mark-bolt-gold")
   assert.equal(activityMark(resolveTheme("tunes", "bento")), "mark-bolt-orange")
   assert.equal(activityMark(resolveTheme("classic-os", "dark")), "mark-os")
+  assert.equal(activityMark(resolveTheme("wizard", "slytherin")), "mark-crest-slytherin")
+  assert.equal(activityLabel(resolveTheme("wizard", "gryffindor")), "GRYFFINDOR")
 })
 
 test("themed label and status lead the subtitle", () => {

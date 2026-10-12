@@ -1,0 +1,67 @@
+{
+  "identifier" : "6F1B2C3D-THEME-TIPS-0001",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "11111111-0000-0000-0000-000000000001",
+      "localizations" : [
+        {
+          "description" : "An optional tip that supports development. Unlocks nothing.",
+          "displayName" : "Tip $0.99",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "ru.opencode.informer.tip.1",
+      "referenceName" : "Tip 1",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "2.99",
+      "familyShareable" : false,
+      "internalID" : "11111111-0000-0000-0000-000000000002",
+      "localizations" : [
+        {
+          "description" : "An optional tip that supports development. Unlocks nothing.",
+          "displayName" : "Tip $2.99",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "ru.opencode.informer.tip.2",
+      "referenceName" : "Tip 2",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "5.99",
+      "familyShareable" : false,
+      "internalID" : "11111111-0000-0000-0000-000000000003",
+      "localizations" : [
+        {
+          "description" : "An optional tip that supports development. Unlocks nothing.",
+          "displayName" : "Tip $5.99",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "ru.opencode.informer.tip.3",
+      "referenceName" : "Tip 3",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
