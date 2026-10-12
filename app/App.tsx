@@ -457,7 +457,7 @@ export default function App() {
 
             <Text style={styles.section}>About</Text>
             <Text style={styles.about}>{APP_DESCRIPTION}</Text>
-            <Text style={styles.about}>Version 0.1.2</Text>
+            <Text style={styles.about}>Version 0.1.1</Text>
 
             <Text style={styles.section}>Demo</Text>
             <PressableScale
