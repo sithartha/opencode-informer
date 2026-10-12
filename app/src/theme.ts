@@ -873,6 +873,11 @@ export function selectThemeOption(skin: SkinId, systemScheme?: string | null): T
   return def.options.some((option) => option.id === "system") ? "system" : def.defaultOption
 }
 
+/** The theme and variant to select and persist when the user switches to a theme. */
+export function themeSelection(skin: SkinId, systemScheme?: string | null): { skin: SkinId; option: ThemeOption } {
+  return { skin, option: selectThemeOption(skin, systemScheme) }
+}
+
 export function resolveTheme(skin: string | null | undefined, option: string | null | undefined, systemScheme?: string | null): Theme {
   const def = isSkinId(skin) ? skinDef(skin) : skinDef(DEFAULT_SKIN)
   const chosen = def.options.some((o) => o.id === option) ? (option as ThemeOption) : def.defaultOption

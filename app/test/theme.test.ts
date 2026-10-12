@@ -12,6 +12,7 @@ import {
   resolveTheme,
   selectThemeOption,
   skinDef,
+  themeSelection,
 } from "../src/theme"
 
 test("the catalog exposes the skins", () => {
@@ -32,6 +33,22 @@ test("the wizard theme resolves its houses", () => {
   assert.equal(resolveTheme("wizard", "hufflepuff").variant, "hufflepuff")
   // No System option: an unknown option falls back to the default.
   assert.equal(resolveTheme("wizard", "system").variant, "gryffindor")
+})
+
+test("switching a theme builds the pair for the selected skin", () => {
+  // Regression: the persisted option used to come from the previous skin, leaving
+  // (wizard, "system") stored, which resolves back to Gryffindor on the next launch.
+  assert.equal(resolveTheme("wizard", "system").variant, "gryffindor")
+
+  const tunes = themeSelection("tunes", "light")
+  assert.equal(tunes.skin, "tunes")
+  assert.equal(tunes.option, "system")
+  assert.equal(resolveTheme(tunes.skin, tunes.option, "light").skin, "tunes")
+
+  const wizard = themeSelection("wizard", "dark")
+  assert.equal(wizard.skin, "wizard")
+  assert.equal(wizard.option, "slytherin")
+  assert.equal(resolveTheme(wizard.skin, wizard.option, "dark").skin, "wizard")
 })
 
 test("the tunes and classic os variants resolve to their palettes", () => {

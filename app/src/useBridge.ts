@@ -481,6 +481,13 @@ export function useBridge() {
     await persistTheme(next, option)
   }, [])
 
+  /** Select a theme together with its variant and persist the pair in one write. */
+  const setSkinAndOption = useCallback(async (next: SkinId, option: ThemeOption) => {
+    setSkinState(next)
+    setThemeOptionState(option)
+    await persistTheme(next, option)
+  }, [])
+
   const setThemeOption = useCallback(
     async (option: ThemeOption) => {
       setThemeOptionState(option)
@@ -743,5 +750,5 @@ export function useBridge() {
     }
   }, [connect, connectManual, connectRemembered, resolve, refresh])
 
-  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, skin, themeOption, setSkin, setThemeOption, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
+  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, skin, themeOption, setSkin, setSkinAndOption, setThemeOption, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
 }

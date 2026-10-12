@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient"
 import { useBridge } from "./src/useBridge"
 import { orderSessions, type PendingRequest, type Session } from "./src/events"
 import { aggregate } from "./src/aggregate"
-import { resolveTheme, SKINS, selectThemeOption, skinDef, type SkinId } from "./src/theme"
+import { resolveTheme, SKINS, skinDef, themeSelection, type SkinId } from "./src/theme"
 import { createStyles } from "./src/styles"
 import { liveActivity } from "./src/liveActivity"
 import { joinHostPort } from "./src/manualConnect"
@@ -51,7 +51,7 @@ export default function App() {
     deviceName,
     skin,
     themeOption,
-    setSkin,
+    setSkinAndOption,
     setThemeOption,
     pairingCodeRequest,
     pairingCodeError,
@@ -204,8 +204,8 @@ export default function App() {
   const themeCardHeight = themesBoxHeight > 0 ? (themesBoxHeight - THEME_GAP * 3) / 3.5 : 84
 
   const selectTheme = (next: SkinId) => {
-    void setSkin(next)
-    void setThemeOption(selectThemeOption(next, systemScheme))
+    const selection = themeSelection(next, systemScheme)
+    void setSkinAndOption(selection.skin, selection.option)
   }
   const buyTip = (id: string) => {
     setTipError(null)
