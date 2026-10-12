@@ -345,6 +345,9 @@ export default function App() {
                     ? entry.resolve("system", theme.dark ? "dark" : "light")
                     : entry.resolve((entry.options.find((o) => entry.resolve(o.id, systemScheme).dark === theme.dark) ?? entry.options[0]).id, systemScheme)
                   const selected = skin === entry.id
+                  // Render the thumbnail with the previewed theme's own tokens so its
+                  // corner style (rounded vs square) is visible in the list.
+                  const previewStyles = createStyles(preview)
                   return (
                     <TouchableOpacity
                       key={entry.id}
@@ -364,12 +367,12 @@ export default function App() {
                           colors={preview.bgGradient}
                           start={{ x: 0, y: 0 }}
                           end={{ x: 1, y: 1 }}
-                          style={[styles.themePreview, { borderColor: preview.border }]}
+                          style={[previewStyles.themePreview, { borderColor: preview.border }]}
                         >
-                          <View style={[styles.themePreviewCard, { backgroundColor: preview.surface, borderColor: preview.border }]}>
-                            <View style={[styles.themePreviewLine, { backgroundColor: preview.accent }]} />
-                            <View style={[styles.themePreviewLine, { width: 16, backgroundColor: preview.textSecondary }]} />
-                            <View style={[styles.themePreviewAccent, { backgroundColor: preview.accent }]} />
+                          <View style={[previewStyles.themePreviewCard, { backgroundColor: preview.surface, borderColor: preview.border }]}>
+                            <View style={[previewStyles.themePreviewLine, { backgroundColor: preview.accent }]} />
+                            <View style={[previewStyles.themePreviewLine, { width: 16, backgroundColor: preview.textSecondary }]} />
+                            <View style={[previewStyles.themePreviewAccent, { backgroundColor: preview.accent }]} />
                           </View>
                         </LinearGradient>
                         {selected ? <Text style={styles.switcherCheck}>✓</Text> : null}
@@ -454,7 +457,7 @@ export default function App() {
 
             <Text style={styles.section}>About</Text>
             <Text style={styles.about}>{APP_DESCRIPTION}</Text>
-            <Text style={styles.about}>Version 0.1.1</Text>
+            <Text style={styles.about}>Version 0.1.2</Text>
 
             <Text style={styles.section}>Demo</Text>
             <PressableScale

@@ -186,6 +186,37 @@ describe("SessionCard", () => {
     expect(getByText("$0.0432")).toBeTruthy()
   })
 
+  it("toggles several options and submits them together for a multi-answer question", async () => {
+    const resolve = jest.fn()
+    const { getByText } = await render(
+      <SessionCard
+        session={session({ phase: "waiting-answer", currentTool: null })}
+        requests={[
+          {
+            requestID: "m1",
+            sessionID: "s1",
+            kind: "question",
+            title: "Which checks?",
+            multiple: true,
+            options: [{ label: "Lint" }, { label: "Unit tests" }],
+            questions: [
+              { key: "q0", title: "Which checks?", options: [{ label: "Lint" }, { label: "Unit tests" }], allowFreeform: false, multiple: true },
+            ],
+          },
+        ]}
+        resolve={resolve}
+        theme={lightTheme}
+        styles={styles}
+      />,
+    )
+    await fireEvent.press(getByText("Lint"))
+    // The question must not resolve on the first tap.
+    expect(resolve).not.toHaveBeenCalled()
+    await fireEvent.press(getByText("Unit tests"))
+    await fireEvent.press(getByText("Submit"))
+    expect(resolve).toHaveBeenCalledWith("m1", "Lint, Unit tests", { q0: ["Lint", "Unit tests"] })
+  })
+
   it("shows only the first pending request for a session", async () => {
     const { queryByText } = await render(
       <SessionCard
@@ -552,5 +583,14 @@ describe("Classic OS window chrome", () => {
       <SessionCard session={session()} requests={[]} resolve={jest.fn()} theme={os} styles={createStyles(os)} />,
     )
     expect(getByText("📁")).toBeTruthy()
+  })
+})
+
+describe("theme preview shape", () => {
+  it("follows the theme's corner style", () => {
+    expect(createStyles(resolveTheme("tunes", "classic")).themePreview.borderRadius).toBe(0)
+    expect(createStyles(resolveTheme("evangelion", "unit01")).themePreview.borderRadius).toBe(0)
+    expect(createStyles(resolveTheme("default", "light")).themePreview.borderRadius).toBeGreaterThan(0)
+    expect(createStyles(resolveTheme("default", "light")).themePreviewCard.borderRadius).toBeGreaterThan(0)
   })
 })

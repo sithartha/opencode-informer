@@ -50,7 +50,7 @@
     "permission.requested": { "required": ["sessionID", "requestID", "title", "summary", "agent"] },
     "question.asked": { "required": ["sessionID", "requestID", "title", "options", "questions"] },
     "option": { "required": ["label"] },
-    "question": { "required": ["key", "title", "options", "allowFreeform"] },
+    "question": { "required": ["key", "title", "options", "allowFreeform", "multiple"] },
     "turn.completed": { "required": ["sessionID", "summary"] },
     "session.activity": { "required": ["sessionID", "text"] },
     "session.updated": { "required": ["sessionID"] },
@@ -155,7 +155,8 @@
               { "label": "PostgreSQL", "value": "postgres", "description": "Managed relational database" },
               { "label": "SQLite", "value": "sqlite", "description": "Embedded file database" }
             ],
-            "allowFreeform": false
+            "allowFreeform": false,
+            "multiple": false
           }
         ]
       }
@@ -179,7 +180,8 @@
               { "label": "Staging", "value": "staging" },
               { "label": "Production", "value": "prod" }
             ],
-            "allowFreeform": false
+            "allowFreeform": false,
+            "multiple": false
           },
           {
             "key": "q1",
@@ -188,7 +190,36 @@
               { "label": "Yes", "value": "yes" },
               { "label": "No", "value": "no" }
             ],
-            "allowFreeform": false
+            "allowFreeform": false,
+            "multiple": false
+          }
+        ]
+      }
+    },
+    "question.asked.multiselect": {
+      "schema": "question.asked",
+      "value": {
+        "sessionID": "ses_1",
+        "requestID": "req_4",
+        "title": "Which checks should I run?",
+        "options": [
+          { "label": "Lint", "value": "lint" },
+          { "label": "Unit tests", "value": "unit" },
+          { "label": "Type check", "value": "types" }
+        ],
+        "allowFreeform": false,
+        "multiple": true,
+        "questions": [
+          {
+            "key": "q0",
+            "title": "Which checks should I run?",
+            "options": [
+              { "label": "Lint", "value": "lint" },
+              { "label": "Unit tests", "value": "unit" },
+              { "label": "Type check", "value": "types" }
+            ],
+            "allowFreeform": false,
+            "multiple": true
           }
         ]
       }

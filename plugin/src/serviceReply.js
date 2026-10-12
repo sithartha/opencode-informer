@@ -47,11 +47,15 @@ export function buildFormAnswer(field, text) {
     return value != null ? value : t
   }
   if (field && field.type === "multiselect") {
-    return String(text)
-      .split(/\s*,\s*/)
-      .map((t) => t.trim())
+    const tokens = Array.isArray(text) ? text : String(text).split(/\s*,\s*/)
+    return tokens
+      .map((t) => String(t).trim())
       .filter(Boolean)
       .map(valueFor)
+  }
+  if (Array.isArray(text)) {
+    const first = text.find((t) => String(t).trim() !== "")
+    return valueFor(first == null ? "" : String(first))
   }
   return valueFor(text)
 }

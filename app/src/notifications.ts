@@ -48,6 +48,19 @@ export function notificationFor(event: ActivityEvent): NotificationPlan | null {
           requestID: String(data.requestID),
         }
       }
+      const selectMultiple =
+        questions.length === 1 ? questions[0]?.multiple === true : questions.length === 0 && data.multiple === true
+      if (selectMultiple) {
+        // A question that allows several answers cannot be answered with one
+        // action; open the app so the user can choose more than one option.
+        return {
+          category: "QUESTION",
+          title: "OpenCode has a question",
+          body: "Open the app to select your answers",
+          actions: [],
+          requestID: String(data.requestID),
+        }
+      }
       const options = parseOptions(data.options).slice(0, MAX_OPTION_ACTIONS).map((option) => option.label)
       return {
         category: "QUESTION",

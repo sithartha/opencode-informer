@@ -36,6 +36,8 @@ export interface Question {
   summary?: string
   options: QuestionOption[]
   allowFreeform: boolean
+  /** True when the question allows several selected options (OpenCode `multiselect`). */
+  multiple: boolean
 }
 
 export interface PendingRequest {
@@ -46,6 +48,8 @@ export interface PendingRequest {
   summary?: string
   options?: QuestionOption[]
   allowFreeform?: boolean
+  /** True when the question allows several selected options. */
+  multiple?: boolean
   /** Every question of a form; a single question for a one-question form. */
   questions?: Question[]
 }
@@ -89,6 +93,7 @@ export function parseQuestions(data: Record<string, unknown>): Question[] {
         summary: question.summary != null ? String(question.summary) : undefined,
         options,
         allowFreeform: question.allowFreeform === true || options.length === 0,
+        multiple: question.multiple === true,
       }
     })
   }
@@ -100,6 +105,7 @@ export function parseQuestions(data: Record<string, unknown>): Question[] {
       summary: data.summary != null ? String(data.summary) : undefined,
       options,
       allowFreeform: data.allowFreeform === true || options.length === 0,
+      multiple: data.multiple === true,
     },
   ]
 }
@@ -125,7 +131,7 @@ function normalizePending(request: PendingRequest): PendingRequest {
   if (request.kind !== "question") return request
   const questions =
     request.questions && request.questions.length > 0
-      ? request.questions.map((question) => ({ ...question, options: parseOptions(question.options) }))
+      ? request.questions.map((question) => ({ ...question, options: parseOptions(question.options), multiple: question.multiple === true }))
       : parseQuestions(request as unknown as Record<string, unknown>)
   const first = questions[0]
   const flat = parseOptions(request.options)
@@ -134,6 +140,7 @@ function normalizePending(request: PendingRequest): PendingRequest {
     ...request,
     options,
     allowFreeform: request.allowFreeform ?? first?.allowFreeform ?? options.length === 0,
+    multiple: request.multiple ?? first?.multiple ?? false,
     questions,
   }
 }
@@ -268,6 +275,7 @@ export function applyEvent(state: AppState, event: ActivityEvent): AppState {
         summary: first.summary,
         options: first.options,
         allowFreeform: first.allowFreeform,
+        multiple: first.multiple,
         questions,
       }
       break

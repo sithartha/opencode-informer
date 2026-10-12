@@ -45,6 +45,23 @@ function askMultiQuestion(model) {
   })
 }
 
+function askMultiSelectQuestion(model) {
+  model.apply({
+    type: "form.created",
+    data: {
+      sessionID: "ses_1",
+      form: {
+        id: "req_4",
+        sessionID: "ses_1",
+        title: "Which checks?",
+        fields: [
+          { key: "q0", title: "Which checks?", type: "multiselect", options: [{ label: "Lint" }, { label: "Unit tests" }] },
+        ],
+      },
+    },
+  })
+}
+
 test("allow applies the permission and marks it resolved", async () => {
   const { model, coordinator, calls } = setup()
   askPermission(model)
@@ -87,6 +104,52 @@ test("a multi-question form requires an answer for every question", async () => 
   assert.deepEqual(calls.question[0].answers, { q0: "Staging", q1: "Yes" })
   assert.equal(calls.question[0].text, "Staging")
   assert.equal(model.isResolved("req_3"), true)
+})
+
+test("a multi-answer question carries every selected option", async () => {
+  const { model, coordinator, calls } = setup()
+  askMultiSelectQuestion(model)
+  const result = await coordinator.resolve("req_4", undefined, { q0: ["Lint", "Unit tests"] })
+  assert.equal(result.applied, true)
+  assert.deepEqual(calls.question[0].answers, { q0: ["Lint", "Unit tests"] })
+  assert.equal(calls.question[0].text, "Lint, Unit tests")
+  assert.equal(model.isResolved("req_4"), true)
+})
+
+test("a multi-answer question with no selection is not applied", async () => {
+  const { model, coordinator, calls } = setup()
+  askMultiSelectQuestion(model)
+  const result = await coordinator.resolve("req_4", undefined, { q0: [] })
+  assert.equal(result.applied, false)
+  assert.equal(result.reason, "invalid_action")
+  assert.deepEqual(calls.question, [])
+  assert.equal(model.isResolved("req_4"), false)
+})
+
+test("a permission raised by a child session is applied to the child", async () => {
+  const { model, coordinator, calls } = setup()
+  model.apply({ type: "session.created", data: { sessionID: "ses_root" } })
+  model.apply({ type: "session.created", data: { sessionID: "ses_child", parentID: "ses_root" } })
+  model.apply({ type: "permission.asked", data: { sessionID: "ses_child", id: "req_child", action: "bash", resources: ["ls"] } })
+
+  const result = await coordinator.resolve("req_child", "allow")
+  assert.equal(result.applied, true)
+  // The reply targets the raising session, not the parent it is shown under.
+  assert.deepEqual(calls.permission[0], { sessionID: "ses_child", requestID: "req_child", decision: "allow" })
+})
+
+test("a form raised by a child session is applied to the child", async () => {
+  const { model, coordinator, calls } = setup()
+  model.apply({ type: "session.created", data: { sessionID: "ses_root" } })
+  model.apply({ type: "session.created", data: { sessionID: "ses_child", parentID: "ses_root" } })
+  model.apply({
+    type: "form.created",
+    data: { sessionID: "ses_child", form: { id: "frm_child", sessionID: "ses_child", title: "Pick", fields: [{ key: "q0", title: "Pick", options: [{ label: "A", value: "a" }] }] } },
+  })
+
+  const result = await coordinator.resolve("frm_child", undefined, { q0: "a" })
+  assert.equal(result.applied, true)
+  assert.equal(calls.question[0].sessionID, "ses_child")
 })
 
 test("unknown and already-resolved requests are not applicable", async () => {

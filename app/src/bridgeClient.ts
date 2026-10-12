@@ -128,12 +128,15 @@ export async function postResolution(
   return res.ok
 }
 
-/** Resolve a multi-question form with an answer for every question. */
+/** A question form's answers: a string, or a list for a question that allows several answers. */
+export type AnswerMap = Record<string, string | string[]>
+
+/** Resolve a question form with an answer for every question. */
 export async function postAnswers(
   base: string,
   token: string,
   requestID: string,
-  answers: Record<string, string>,
+  answers: AnswerMap,
   fetchImpl: FetchLike = fetch,
 ): Promise<boolean> {
   const res = await fetchImpl(resolutionUrl(base), {

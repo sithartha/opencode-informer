@@ -35,7 +35,7 @@ While connected, the app SHALL display the current sessions, each session's phas
 
 ### Requirement: Actionable notifications
 
-The app SHALL raise a local notification when an agent requests a permission, asks a question, or completes a turn, and permission and question notifications SHALL offer the actions needed to respond. When a question form has several questions, the notification SHALL route the user into the app to answer the whole form rather than offering one question's options as actions.
+The app SHALL raise a local notification when an agent requests a permission, asks a question, or completes a turn, and permission and question notifications SHALL offer the actions needed to respond. When a question form has several questions, the notification SHALL route the user into the app to answer the whole form rather than offering one question's options as actions. When a question allows several answers, the notification SHALL likewise route the user into the app rather than offering a single option as an action.
 
 #### Scenario: Permission notification with actions
 - **WHEN** the app receives a permission request
@@ -61,9 +61,13 @@ The app SHALL raise a local notification when an agent requests a permission, as
 - **WHEN** the app receives a question form with several questions
 - **THEN** the notification opens the app to answer the form and does not offer a single question's options as actions
 
+#### Scenario: Question that allows several answers notification
+- **WHEN** the app receives a question that allows several answers
+- **THEN** the notification opens the app to answer it and does not offer a single option as an action
+
 ### Requirement: Responding from the phone
 
-The app SHALL send the user's allow, deny, or answer decision to the bridge and SHALL reflect the result in its UI. For a question form with several questions, the app SHALL collect an answer for every question and send them together, and SHALL not submit the form until every question is answered.
+The app SHALL send the user's allow, deny, or answer decision to the bridge and SHALL reflect the result in its UI. For a question form with several questions, the app SHALL collect an answer for every question and send them together, and SHALL not submit the form until every question is answered. For a question that allows several answers, the app SHALL let the user select more than one option and SHALL send the selected options together when the user submits, and SHALL not resolve the question on the first option the user taps.
 
 #### Scenario: Allow from a notification
 - **WHEN** the user taps allow on a permission notification
@@ -84,6 +88,14 @@ The app SHALL send the user's allow, deny, or answer decision to the bridge and 
 #### Scenario: Incomplete form cannot be submitted
 - **WHEN** a multi-question form has an unanswered question
 - **THEN** the app keeps the submit control disabled until every question is answered
+
+#### Scenario: Select several options
+- **WHEN** a pending question allows several answers and the user taps an option
+- **THEN** the app toggles that option's selected state and keeps the question pending
+
+#### Scenario: Submit several options
+- **WHEN** the user has selected one or more options for a question that allows several answers and submits
+- **THEN** the app sends the selected options together as one resolution and removes the pending question
 
 ### Requirement: Background wake
 
@@ -471,7 +483,7 @@ While paired, the app SHALL let the user disconnect from the currently connected
 
 ### Requirement: Interface theme selection
 
-The app SHALL let the user pick the interface theme from a scrollable list of theme cards in Settings, shown in a bordered area that scrolls vertically and shows three cards fully and half of the next — currently **Default**, **Nerv**, **Cat**, **The Force**, **Tunes**, **Classic OS**, and **Wizard**, all free — and SHALL let the user choose that theme's variant: the Default theme offers Light, Dark, and System (following the iPhone's setting), the **Nerv** theme offers Unit 00, Unit 01, and Unit 02, the **Cat** theme offers Hello Kitty, Chococat, and System, **The Force** theme offers Sith, Jedi, and System (System follows the iPhone's setting: light → Jedi, dark → Sith), the **Tunes** theme offers Classic, Bento, and System (System follows the iPhone's setting: light → Bento, dark → Classic), the **Classic OS** theme offers Blue, Dark, and System (System follows the iPhone's setting: light → Blue, dark → Dark), and the **Wizard** theme offers Gryffindor, Slytherin, Ravenclaw, and Hufflepuff. Selecting a theme SHALL set its variant to the theme's **System** option, except for the **Nerv** theme (no System option) which SHALL set **Unit 01**, and the **Wizard** theme (no System option) which SHALL set **Gryffindor** on a light iPhone and **Slytherin** on a dark one. The theme names and descriptions SHALL use neutral synonyms or abbreviations and SHALL NOT contain trademarked terms. The app SHALL persist the chosen theme and variant and apply them on the next launch.
+The app SHALL let the user pick the interface theme from a scrollable list of theme cards in Settings, shown in a bordered area that scrolls vertically and shows three cards fully and half of the next — currently **Default**, **Nerv**, **Cat**, **The Force**, **Tunes**, **Classic OS**, and **Wizard**, all free — and SHALL let the user choose that theme's variant: the Default theme offers Light, Dark, and System (following the iPhone's setting), the **Nerv** theme offers Unit 00, Unit 01, and Unit 02, the **Cat** theme offers Hello Kitty, Chococat, and System, **The Force** theme offers Sith, Jedi, and System (System follows the iPhone's setting: light → Jedi, dark → Sith), the **Tunes** theme offers Classic, Bento, and System (System follows the iPhone's setting: light → Bento, dark → Classic), the **Classic OS** theme offers Blue, Dark, and System (System follows the iPhone's setting: light → Blue, dark → Dark), and the **Wizard** theme offers Gryffindor, Slytherin, Ravenclaw, and Hufflepuff. Each card's preview thumbnail SHALL reflect that theme's own look — its palette and its corner style (rounded or square). Selecting a theme SHALL set its variant to the theme's **System** option, except for the **Nerv** theme (no System option) which SHALL set **Unit 01**, and the **Wizard** theme (no System option) which SHALL set **Gryffindor** on a light iPhone and **Slytherin** on a dark one. The theme names and descriptions SHALL use neutral synonyms or abbreviations and SHALL NOT contain trademarked terms. The app SHALL persist the chosen theme and variant and apply them on the next launch.
 
 #### Scenario: Theme list
 - **WHEN** the user opens the appearance settings
@@ -480,6 +492,10 @@ The app SHALL let the user pick the interface theme from a scrollable list of th
 #### Scenario: Theme list layout
 - **WHEN** the appearance settings are shown
 - **THEN** three theme cards are visible in full and half of the next card is visible, the list scrolls vertically inside a bordered area, and each card shows the theme's palette preview, name, and description
+
+#### Scenario: Preview reflects the theme's shape
+- **WHEN** the theme cards are shown
+- **THEN** each card's preview thumbnail uses that theme's corner style — rounded for the rounded themes and square for the square-cornered themes (for example Nerv and Tunes)
 
 #### Scenario: Default theme variants
 - **WHEN** the Default theme is selected

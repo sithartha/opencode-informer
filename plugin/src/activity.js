@@ -69,6 +69,7 @@ function questionList(form) {
       summary,
       options,
       allowFreeform: Boolean(field && field.custom) || options.length === 0,
+      multiple: Boolean(field && field.type === "multiselect"),
     }
   })
 }
@@ -166,6 +167,7 @@ export class ActivityModel {
         summary: pending.summary,
         options: pending.options,
         allowFreeform: Boolean(pending.allowFreeform),
+        multiple: Boolean(pending.multiple),
         questions: pending.questions,
       })),
     }
@@ -485,7 +487,7 @@ export class ActivityModel {
         if (requestID) {
           const removed = supersedeSessionPending(this.pending, root)
           for (const oldID of removed) out.push(ev("actionable.resolved", { sessionID: root, requestID: oldID }))
-          this.pending.set(requestID, { sessionID: root, kind: "permission", title, summary })
+          this.pending.set(requestID, { sessionID: root, replySessionID: payload.sessionID, kind: "permission", title, summary })
         }
         if (session) {
           session.phase = "waiting-permission"
@@ -530,17 +532,20 @@ export class ActivityModel {
         const title = (first && first.title) || form.title || "Question"
         const options = first ? first.options : []
         const allowFreeform = first ? first.allowFreeform : true
+        const multiple = first ? Boolean(first.multiple) : false
         const summary = first && first.summary
         if (requestID) {
           const removed = supersedeSessionPending(this.pending, root)
           for (const oldID of removed) out.push(ev("actionable.resolved", { sessionID: root, requestID: oldID }))
           this.pending.set(requestID, {
             sessionID: root,
+            replySessionID: form.sessionID || payload.sessionID,
             kind: "question",
             title,
             summary,
             options,
             allowFreeform,
+            multiple,
             fields: form.fields,
             questions,
           })
@@ -551,7 +556,7 @@ export class ActivityModel {
           // question is shown separately and the pre-question text is preserved.
           session.updatedAt = Date.now()
         }
-        out.push(ev("question.asked", { sessionID: root, requestID, title, summary, options, allowFreeform, questions }))
+        out.push(ev("question.asked", { sessionID: root, requestID, title, summary, options, allowFreeform, multiple, questions }))
         return out
       }
 

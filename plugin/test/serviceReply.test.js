@@ -23,6 +23,12 @@ test("buildFormAnswer handles a multiselect field", () => {
   assert.deepEqual(buildFormAnswer(field, "A, B"), ["a", "b"])
 })
 
+test("buildFormAnswer accepts an array for a multiselect field", () => {
+  const field = { type: "multiselect", options: [{ label: "A", value: "a" }, { label: "B", value: "b" }] }
+  assert.deepEqual(buildFormAnswer(field, ["A", "B"]), ["a", "b"])
+  assert.deepEqual(buildFormAnswer(field, ["b"]), ["b"])
+})
+
 test("buildFormAnswer accepts plain string options", () => {
   const field = { key: "db", options: ["PostgreSQL", "SQLite"] }
   assert.equal(buildFormAnswer(field, "SQLite"), "SQLite")

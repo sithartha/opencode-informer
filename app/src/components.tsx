@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react"
 import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
-import type { PendingRequest, QuestionOption, Session } from "./events"
+import type { PendingRequest, Question, QuestionOption, Session } from "./events"
 import { optionValue } from "./events"
 import type { Aggregate } from "./aggregate"
 import type { Theme } from "./theme"
@@ -18,7 +18,7 @@ export const PHASE_COLORS: Record<string, string> = {
   completed: "#616161",
 }
 
-export type Resolve = (id: string, action: string, answers?: Record<string, string>) => void
+export type Resolve = (id: string, action: string, answers?: Record<string, string | string[]>) => void
 
 /** A regular hexagon (flat top/bottom, pointy left/right), built from three views. */
 export function Hexagon({ size = 30, color, style, children }: { size?: number; color: string; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
@@ -219,6 +219,89 @@ function OptionButton({
   )
 }
 
+function toggleValue(list: string | string[] | undefined, value: string): string[] {
+  const current = Array.isArray(list) ? list : []
+  return current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value]
+}
+
+function isAnswered(value: string | string[] | undefined): boolean {
+  return Array.isArray(value) ? value.length > 0 : (value ?? "").trim().length > 0
+}
+
+function answerText(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? value.join(", ") : value ?? ""
+}
+
+/**
+ * A question that allows several answers: options toggle on and off and are sent
+ * together only when the user submits, so the question never resolves on the
+ * first tap.
+ */
+export function MultiSelectQuestion({
+  question,
+  requestID,
+  resolve,
+  styles,
+  theme,
+  onFieldFocus,
+}: {
+  question: Question
+  requestID: string
+  resolve: Resolve
+  styles: Styles
+  theme: Theme
+  onFieldFocus?: (y: number, h: number) => void
+}) {
+  const [selected, setSelected] = useState<string[]>([])
+  const toggle = (value: string) => setSelected((prev) => toggleValue(prev, value))
+  const complete = selected.length > 0
+
+  return (
+    <View>
+      {question.options.length > 0 ? (
+        <View style={styles.optionList}>
+          {question.options.map((option) => {
+            const value = optionValue(option)
+            return (
+              <OptionButton
+                key={option.label}
+                option={option}
+                selected={selected.includes(value)}
+                onPress={() => toggle(value)}
+                accessibilityLabel={`${question.title}: ${option.label}`}
+                theme={theme}
+                styles={styles}
+              />
+            )
+          })}
+        </View>
+      ) : null}
+      {question.allowFreeform ? (
+        <InlineInput
+          placeholder="Add an answer"
+          onSubmit={(value) => setSelected((prev) => toggleValue(prev, value))}
+          styles={styles}
+          theme={theme}
+          onFieldFocus={onFieldFocus}
+          accent
+          textColor={theme.questionText}
+        />
+      ) : null}
+      <View style={styles.actions}>
+        <PressableScale
+          disabled={!complete}
+          onPress={() => complete && resolve(requestID, selected.join(", "), { [question.key]: selected })}
+          accessibilityLabel="Submit answers"
+        >
+          <View style={[styles.actionInner, { backgroundColor: theme.allow, opacity: complete ? 1 : 0.5 }]}>
+            <Text style={styles.actionText}>Submit</Text>
+          </View>
+        </PressableScale>
+      </View>
+    </View>
+  )
+}
+
 export function MultiQuestionForm({
   request,
   resolve,
@@ -233,9 +316,11 @@ export function MultiQuestionForm({
   onFieldFocus?: (y: number, h: number) => void
 }) {
   const questions = request.questions ?? []
-  const [answers, setAnswers] = useState<Record<string, string>>({})
-  const setAnswer = (key: string, value: string) => setAnswers((prev) => ({ ...prev, [key]: value }))
-  const complete = questions.length > 0 && questions.every((question) => (answers[question.key] ?? "").trim().length > 0)
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({})
+  const setAnswer = (key: string, value: string | string[]) => setAnswers((prev) => ({ ...prev, [key]: value }))
+  const toggleAnswer = (key: string, value: string) =>
+    setAnswers((prev) => ({ ...prev, [key]: toggleValue(prev[key], value) }))
+  const complete = questions.length > 0 && questions.every((question) => isAnswered(answers[question.key]))
 
   return (
     <View>
@@ -253,8 +338,8 @@ export function MultiQuestionForm({
                     <OptionButton
                       key={option.label}
                       option={option}
-                      selected={selected === value}
-                      onPress={() => setAnswer(question.key, value)}
+                      selected={question.multiple ? Array.isArray(selected) && selected.includes(value) : selected === value}
+                      onPress={() => (question.multiple ? toggleAnswer(question.key, value) : setAnswer(question.key, value))}
                       accessibilityLabel={`${question.title}: ${option.label}`}
                       theme={theme}
                       styles={styles}
@@ -266,7 +351,11 @@ export function MultiQuestionForm({
             {question.allowFreeform ? (
               <InlineInput
                 placeholder="Type an answer"
-                onSubmit={(value) => setAnswer(question.key, value)}
+                onSubmit={(value) =>
+                  question.multiple
+                    ? setAnswer(question.key, [...(Array.isArray(selected) ? selected : []), value])
+                    : setAnswer(question.key, value)
+                }
                 styles={styles}
                 theme={theme}
                 onFieldFocus={onFieldFocus}
@@ -280,7 +369,7 @@ export function MultiQuestionForm({
       <View style={styles.actions}>
         <PressableScale
           disabled={!complete}
-          onPress={() => complete && resolve(request.requestID, answers[questions[0].key] ?? "", answers)}
+          onPress={() => complete && resolve(request.requestID, answerText(answers[questions[0].key]), answers)}
           accessibilityLabel="Submit answers"
         >
           <View style={[styles.actionInner, { backgroundColor: theme.allow, opacity: complete ? 1 : 0.5 }]}>
@@ -324,6 +413,24 @@ export function PendingActions({
 
   if ((request.questions?.length ?? 0) > 1) {
     return <MultiQuestionForm request={request} resolve={resolve} styles={styles} theme={theme} onFieldFocus={onFieldFocus} />
+  }
+
+  const question =
+    request.questions?.[0] ??
+    (request.multiple
+      ? { key: "q0", title: request.title, options: request.options ?? [], allowFreeform: request.allowFreeform ?? false, multiple: true }
+      : undefined)
+  if (request.multiple && question) {
+    return (
+      <MultiSelectQuestion
+        question={question}
+        requestID={request.requestID}
+        resolve={resolve}
+        styles={styles}
+        theme={theme}
+        onFieldFocus={onFieldFocus}
+      />
+    )
   }
 
   const options = request.options ?? []

@@ -183,6 +183,38 @@ test("snapshot includes pending permissions and questions", () => {
   assert.deepEqual(question.options, [{ label: "Postgres" }])
 })
 
+test("a permission raised by a child session remembers the child for the reply", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_root"), created("ses_child", { parentID: "ses_root" })])
+  const out = apply(model, [
+    { type: "permission.asked", data: { sessionID: "ses_child", id: "req_child", action: "bash", resources: ["ls"] } },
+  ])
+  // Presented under the parent...
+  assert.equal(out.find((e) => e.type === "permission.requested").data.sessionID, "ses_root")
+  // ...but the reply must target the session that raised it.
+  const pending = model.pendingRequest("req_child")
+  assert.equal(pending.sessionID, "ses_root")
+  assert.equal(pending.replySessionID, "ses_child")
+  // The app-facing snapshot stays grouped under the parent and hides the reply id.
+  const snapshot = model.snapshot().pending.find((p) => p.requestID === "req_child")
+  assert.equal(snapshot.sessionID, "ses_root")
+  assert.equal("replySessionID" in snapshot, false)
+})
+
+test("a form raised by a child session remembers the child for the reply", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_root"), created("ses_child", { parentID: "ses_root" })])
+  apply(model, [
+    {
+      type: "form.created",
+      data: { sessionID: "ses_child", form: { id: "frm_child", sessionID: "ses_child", title: "Pick", fields: [{ key: "q0", title: "Pick", options: [{ label: "A" }] }] } },
+    },
+  ])
+  const pending = model.pendingRequest("frm_child")
+  assert.equal(pending.sessionID, "ses_root")
+  assert.equal(pending.replySessionID, "ses_child")
+})
+
 test("a new request supersedes a session's previous pending", () => {
   const model = new ActivityModel()
   apply(model, [created("ses_1")])
@@ -395,14 +427,51 @@ test("form.created with several fields exposes every question", () => {
     summary: undefined,
     options: [{ label: "Staging", value: "staging" }, { label: "Production", value: "prod" }],
     allowFreeform: false,
+    multiple: false,
   })
   assert.equal(asked.data.questions[1].key, "q1")
   assert.equal(asked.data.questions[1].allowFreeform, true)
   // The flat fields mirror the first question for older clients.
   assert.equal(asked.data.title, "Deploy target?")
+  assert.equal(asked.data.multiple, false)
   assert.deepEqual(asked.data.options, [{ label: "Staging", value: "staging" }, { label: "Production", value: "prod" }])
   // The snapshot carries every question so a reconnect can answer the whole form.
   assert.equal(model.snapshot().pending[0].questions.length, 2)
+})
+
+test("form.created marks a multiselect field as multi-answer", () => {
+  const model = new ActivityModel()
+  const out = apply(model, [
+    created("ses_1"),
+    {
+      type: "form.created",
+      data: {
+        sessionID: "ses_1",
+        form: {
+          id: "f3",
+          sessionID: "ses_1",
+          title: "Questions",
+          fields: [
+            {
+              key: "q0",
+              title: "Which checks?",
+              type: "multiselect",
+              options: [
+                { value: "lint", label: "Lint" },
+                { value: "unit", label: "Unit tests" },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ])
+  const asked = out.find((e) => e.type === "question.asked")
+  assert.equal(asked.data.questions[0].multiple, true)
+  assert.equal(asked.data.multiple, true)
+  // A reconnect still knows to offer multi-selection.
+  assert.equal(model.snapshot().pending[0].questions[0].multiple, true)
+  assert.equal(model.snapshot().pending[0].multiple, true)
 })
 
 test("session.step.started records the agent and model", () => {

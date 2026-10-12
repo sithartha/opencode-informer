@@ -202,6 +202,23 @@ test("resolution is applied from the stream end to end", async (t) => {
   assert.equal((await unknown.json()).status, "not_applicable")
 })
 
+test("a subagent permission is resolved in the raising session", async (t) => {
+  const { bridge, calls, port } = await startBridge(t)
+  const token = await pair(port, bridge)
+  bridge.handleEvent({ type: "session.created", data: { sessionID: "ses_root" }, location: { directory: "/tmp" } })
+  bridge.handleEvent({ type: "session.created", data: { sessionID: "ses_child", parentID: "ses_root" }, location: { directory: "/tmp" } })
+  bridge.handleEvent({ type: "permission.asked", data: { sessionID: "ses_child", id: "req_child", action: "bash", resources: ["ls"] } })
+
+  const res = await fetch(`http://127.0.0.1:${port}/resolution`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ requestID: "req_child", action: "allow" }),
+  })
+  assert.equal(res.status, 200)
+  // The reply must target the child that raised it, not the parent it is shown under.
+  assert.deepEqual(calls.permission[0], { sessionID: "ses_child", requestID: "req_child", decision: "allow" })
+})
+
 test("a resolution made on the Mac is reflected to stream clients", async (t) => {
   const { bridge, port } = await startBridge(t)
   const token = await pair(port, bridge)

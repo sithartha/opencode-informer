@@ -4,7 +4,7 @@ import Constants from "expo-constants"
 import * as Notifications from "expo-notifications"
 import { applyEvent, emptyState, parseOptions, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
 import { connectionReducer, initialConnection } from "./connection"
-import { beginPairing, baseUrl, fetchState, pollPairing, postAnswers, postPrompt, postResolution, type ModelRef, type SessionOptions } from "./bridgeClient"
+import { beginPairing, baseUrl, fetchState, pollPairing, postAnswers, postPrompt, postResolution, type AnswerMap, type ModelRef, type SessionOptions } from "./bridgeClient"
 import * as sessionActions from "./sessionActions"
 import { BleClient } from "./bleClient"
 import { BridgeStream } from "./sse"
@@ -571,7 +571,7 @@ export function useBridge() {
     }
   }, [])
 
-  const resolve = useCallback(async (requestID: string, action: string, answers?: Record<string, string>) => {
+  const resolve = useCallback(async (requestID: string, action: string, answers?: AnswerMap) => {
     const base = baseRef.current
     const token = tokenRef.current
     if (!base || !token) return false

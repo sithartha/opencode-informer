@@ -21,6 +21,24 @@ test("question events map options to actions", () => {
   )
 })
 
+test("a question that allows several answers opens the app without option actions", () => {
+  const plan = notificationFor({
+    type: "question.asked",
+    data: {
+      sessionID: "s1",
+      requestID: "q1",
+      title: "Which checks?",
+      options: ["Lint", "Unit tests"],
+      multiple: true,
+      questions: [
+        { key: "q0", title: "Which checks?", options: [{ label: "Lint" }, { label: "Unit tests" }], allowFreeform: false, multiple: true },
+      ],
+    },
+  })
+  assert.equal(plan?.category, "QUESTION")
+  assert.equal(plan?.actions.length, 0)
+})
+
 test("completion events are informational", () => {
   const plan = notificationFor({ type: "turn.completed", data: { sessionID: "s1", summary: "done" } })
   assert.equal(plan?.category, "SESSION_COMPLETED")

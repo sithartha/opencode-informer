@@ -20,7 +20,38 @@ function questionKey(question, index) {
 }
 
 /**
- * Normalize a question resolution into `{ answers: { <key>: <text> }, text }`.
+ * The session a reply must be applied to: the session that raised the request.
+ * A subagent's request is presented under its parent, but OpenCode only accepts
+ * the reply in the raising session.
+ */
+function replySessionID(pending) {
+  return (pending && pending.replySessionID) || (pending && pending.sessionID)
+}
+
+/**
+ * Coerce one provided answer into the shape its question expects: a list for a
+ * question that allows several answers, a single string otherwise. Returns null
+ * when the answer is empty, so an incomplete form is never applied.
+ */
+function coerceAnswer(question, value) {
+  const allowsMultiple = Boolean(question && question.multiple)
+  if (Array.isArray(value)) {
+    const items = value.map((entry) => String(entry).trim()).filter(Boolean)
+    if (items.length === 0) return null
+    return allowsMultiple ? items : items[0]
+  }
+  const text = value == null ? "" : String(value).trim()
+  if (text === "") return null
+  if (allowsMultiple) return text.split(/\s*,\s*/).map((entry) => entry.trim()).filter(Boolean)
+  return text
+}
+
+function answerText(value) {
+  return Array.isArray(value) ? value.join(", ") : value
+}
+
+/**
+ * Normalize a question resolution into `{ answers: { <key>: <text|list> }, text }`.
  * Every question of a multi-question form must be answered; returns null when the
  * resolution is incomplete so the bridge never applies a partial form reply.
  */
@@ -31,20 +62,23 @@ function questionAnswers(pending, action, answers) {
 
   if (questions.length > 1) {
     for (let index = 0; index < questions.length; index += 1) {
-      const key = questionKey(questions[index], index)
-      const value = provided[key]
-      if (value == null || String(value).trim() === "") return null
-      out[key] = String(value)
+      const question = questions[index]
+      const key = questionKey(question, index)
+      const value = coerceAnswer(question, provided[key])
+      if (value == null) return null
+      out[key] = value
     }
-    return { answers: out, text: out[questionKey(questions[0], 0)] }
+    return { answers: out, text: answerText(out[questionKey(questions[0], 0)]) }
   }
 
   // Single question: accept a legacy `action` string or a keyed answer.
-  const key = questionKey(questions[0], 0)
-  const value = provided[key] != null ? String(provided[key]) : String(action == null ? "" : action)
-  if (!value) return null
+  const question = questions[0]
+  const key = questionKey(question, 0)
+  const raw = provided[key] != null ? provided[key] : action
+  const value = coerceAnswer(question, raw)
+  if (value == null) return null
   out[key] = value
-  return { answers: out, text: value }
+  return { answers: out, text: answerText(value) }
 }
 
 export class ResolutionCoordinator {
@@ -74,13 +108,13 @@ export class ResolutionCoordinator {
         if (!PERMISSION_ACTIONS.has(decision)) {
           return { applied: false, reason: "invalid_action" }
         }
-        await withTimeout(this.applyPermission({ sessionID: pending.sessionID, requestID, decision }), this.applyTimeoutMs)
+        await withTimeout(this.applyPermission({ sessionID: replySessionID(pending), requestID, decision }), this.applyTimeoutMs)
       } else {
         const resolved = questionAnswers(pending, action, answers)
         if (!resolved) return { applied: false, reason: "invalid_action" }
         await withTimeout(
           this.applyQuestion({
-            sessionID: pending.sessionID,
+            sessionID: replySessionID(pending),
             requestID,
             text: resolved.text,
             fields: pending.fields,

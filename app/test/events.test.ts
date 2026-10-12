@@ -108,6 +108,12 @@ test("parseQuestions synthesizes one question from the flat fields", () => {
   assert.equal(questions[0].title, "Which db?")
   assert.deepEqual(questions[0].options, [{ label: "Postgres" }, { label: "SQLite", description: "Embedded" }])
   assert.equal(questions[0].allowFreeform, true)
+  assert.equal(questions[0].multiple, false)
+})
+
+test("parseQuestions carries the multi-answer flag from a flat field", () => {
+  const questions = parseQuestions({ title: "Which checks?", options: ["Lint", "Unit tests"], multiple: true })
+  assert.equal(questions[0].multiple, true)
 })
 
 test("a multi-question form exposes every question on the pending request", () => {
