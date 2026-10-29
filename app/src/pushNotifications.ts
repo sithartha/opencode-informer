@@ -17,7 +17,7 @@ Notifications.setNotificationHandler({
   },
 })
 
-/** Register actionable categories (no prompt) and request permission without blocking. */
+/** Register actionable categories (no prompt). */
 export async function configureNotifications(): Promise<boolean> {
   await Notifications.setNotificationCategoryAsync("PERMISSION_REQUEST", [
     { identifier: ALLOW_ACTION, buttonTitle: "Allow" },
@@ -27,11 +27,15 @@ export async function configureNotifications(): Promise<boolean> {
   await Notifications.setNotificationCategoryAsync("SESSION_COMPLETED", [])
 
   const settings = await Notifications.getPermissionsAsync()
-  if (!settings.granted) {
-    // Do not await: the prompt must never block connecting to the Mac.
-    void Notifications.requestPermissionsAsync()
-  }
   return settings.granted
+}
+
+/** Ask for notification permission at a moment the user can understand. */
+export async function requestNotificationPermission(): Promise<boolean> {
+  const settings = await Notifications.getPermissionsAsync()
+  if (settings.granted) return true
+  const requested = await Notifications.requestPermissionsAsync()
+  return requested.granted
 }
 
 /** Register the option actions for a specific question (options vary per question). */

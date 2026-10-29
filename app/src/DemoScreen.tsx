@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ScrollView, Text, View } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { aggregate } from "./aggregate"
 import { applyEvent, emptyState, type AppState, type PendingRequest } from "./events"
 import type { StreamEventType } from "./contract"
@@ -63,6 +64,7 @@ export function DemoScreen({
   theme: Theme
   styles: Styles
 }) {
+  const insets = useSafeAreaInsets()
   const [state, setState] = useState<AppState>(seed)
   const [switcher, setSwitcher] = useState<Session | null>(null)
   const agg = aggregate(state)
@@ -150,7 +152,7 @@ export function DemoScreen({
   return (
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
       <ScreenBackdrop theme={theme} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Demo</Text>
           <View style={styles.headerLinks}>

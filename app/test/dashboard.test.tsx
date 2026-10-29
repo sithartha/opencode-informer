@@ -108,7 +108,7 @@ describe("SessionCard", () => {
   it("shows the phase, tool, counts, and last activity", async () => {
     const { getByText, getAllByText } = await render(<SessionCard session={session()} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />)
     expect(getAllByText("api").length).toBeGreaterThan(0)
-    expect(getByText("running")).toBeTruthy()
+    expect(getByText("Running")).toBeTruthy()
     expect(getByText("tool · Bash")).toBeTruthy()
     expect(getByText("2 subagents")).toBeTruthy()
     expect(getByText("3 shells")).toBeTruthy()
@@ -698,7 +698,7 @@ describe("session layout controls", () => {
     )
     expect(getByText("api")).toBeTruthy()
     expect(queryByText("A named session")).toBeNull()
-    expect(getByText("running")).toBeTruthy()
+    expect(getByText("Running")).toBeTruthy()
     expect(getByText("tool · Bash")).toBeTruthy()
     expect(getByTestId("agent-avatar:thinking", { includeHiddenElements: true })).toBeTruthy()
     await fireEvent.press(getByText("api"))
@@ -726,7 +726,7 @@ describe("session layout controls", () => {
         onOpen={jest.fn()}
       />,
     )
-    expect(getByText("waiting-permission")).toBeTruthy()
+    expect(getByText("Needs approval")).toBeTruthy()
     expect(getByTestId("agent-avatar:observing", { includeHiddenElements: true })).toBeTruthy()
   })
 
@@ -780,6 +780,24 @@ function collectStyles(node: unknown, found: Array<Record<string, unknown>> = []
   if (element.children) collectStyles(element.children, found)
   return found
 }
+
+describe("loading and touch targets", () => {
+  it("shows loading options instead of an empty switcher", async () => {
+    const { getByText, queryByText } = await render(
+      <SwitcherModal visible agents={[]} models={[]} loading onSelectAgent={jest.fn()} onSelectModel={jest.fn()} onClose={jest.fn()} theme={lightTheme} styles={styles} />,
+    )
+    expect(getByText("Loading modes and models…")).toBeTruthy()
+    expect(queryByText("No modes reported")).toBeNull()
+  })
+
+  it("keeps segments and layout toggles at least 44pt tall", () => {
+    expect(styles.segmentSelected.minHeight).toBe(44)
+    expect(styles.segmentUnselected.minHeight).toBe(44)
+    expect(styles.layoutToggleItem.minHeight).toBe(44)
+    expect(styles.stopButton.minHeight).toBe(44)
+    expect(styles.closeButton.minHeight).toBe(44)
+  })
+})
 
 describe("Terminal theme", () => {
   it("flattens corners, shadows and typography", () => {

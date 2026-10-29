@@ -1,12 +1,15 @@
 import { StatusBar } from "expo-status-bar"
+import Constants from "expo-constants"
+import * as Clipboard from "expo-clipboard"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Switch, Text, TextInput, TouchableOpacity, useColorScheme, View, type LayoutChangeEvent } from "react-native"
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, LayoutAnimation, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Switch, Text, TextInput, TouchableOpacity, UIManager, useColorScheme, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useBridge } from "./src/useBridge"
 import { orderSessions, type PendingRequest, type Session } from "./src/events"
 import { sessionPresentation, toggleExpanded, type SessionLayout } from "./src/layout"
 import { aggregate } from "./src/aggregate"
-import { resolveTheme, SKINS, skinDef, themeSelection, type SkinId } from "./src/theme"
+import { readableInk, resolveTheme, SKINS, skinDef, themeSelection, type SkinId } from "./src/theme"
 import { createStyles } from "./src/styles"
 import { liveActivity } from "./src/liveActivity"
 import { joinHostPort } from "./src/manualConnect"
@@ -17,7 +20,12 @@ import { DemoScreen } from "./src/DemoScreen"
 import { Ionicons } from "@expo/vector-icons"
 import { TIP_IDS, TipStore } from "./src/purchases"
 import { createIapAdapter, initIap } from "./src/iapAdapter"
-import { FadeIn, GlowDot, PressableScale } from "./src/ui"
+import { FadeIn, GlowDot, PressableScale, useReducedMotion } from "./src/ui"
+import { CTA, connectionLabel, relativeTime } from "./src/copy"
+import { isStale } from "./src/staleness"
+import { requestNotificationPermission } from "./src/pushNotifications"
+import { haptics } from "./src/haptics"
+import { DURATION, EASE } from "./src/motion"
 
 const APP_DESCRIPTION =
   "OpenCode Informer mirrors your OpenCode agents to this phone: watch their activity, get notified when one needs you, and approve or answer right from the Lock Screen — over your local WiFi and Bluetooth, with no server."
@@ -31,9 +39,48 @@ const TIP_COPY = [
 
 // Three cards fully + half of the next card in the bordered theme list.
 const THEME_GAP = 4
+const SETUP_URL = "https://github.com/sithartha/opencode-informer#readme"
+const PRIVACY_URL = "https://github.com/sithartha/opencode-informer/blob/main/docs/privacy-policy.md"
 
+
+function MeasuredCard({
+  id,
+  onFrame,
+  onLayout,
+  style,
+  children,
+}: {
+  id: string
+  onFrame: (id: string, y: number, height: number) => void
+  onLayout?: (event: LayoutChangeEvent) => void
+  style?: StyleProp<ViewStyle>
+  children: React.ReactNode
+}) {
+  const ref = useRef<View>(null)
+  return (
+    <View
+      ref={ref}
+      style={style}
+      onLayout={(event) => {
+        onLayout?.(event)
+        ref.current?.measureInWindow((_x, y, _width, height) => onFrame(id, y, height))
+      }}
+    >
+      {children}
+    </View>
+  )
+}
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <AppScreen />
+    </SafeAreaProvider>
+  )
+}
+
+function AppScreen() {
+  const insets = useSafeAreaInsets()
   const {
     appState,
     connection,
@@ -60,9 +107,30 @@ export default function App() {
     submitPairingCode,
     cancelPairingCode,
     diagnostic,
+    lastUpdatedAt,
+    refresh,
   } = useBridge()
 
+  useEffect(() => {
+    if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true)
+    }
+  }, [])
+
+  const [nowTick, setNowTick] = useState(Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 30000)
+    return () => clearInterval(timer)
+  }, [])
+  const stale = isStale(lastUpdatedAt, nowTick)
+  const [refreshing, setRefreshing] = useState(false)
+  const [starting, setStarting] = useState(false)
+  const [optionsLoading, setOptionsLoading] = useState(false)
+  const [buyingTip, setBuyingTip] = useState<string | null>(null)
+  const [showDiagnostics, setShowDiagnostics] = useState(false)
+
   const systemScheme = useColorScheme()
+  const reduceMotion = useReducedMotion()
   const theme = resolveTheme(skin, themeOption, systemScheme)
   const styles = useMemo(() => createStyles(theme), [theme])
 
@@ -72,6 +140,12 @@ export default function App() {
   useEffect(() => {
     liveActivity.refreshTheme()
   }, [theme])
+
+  const wasConnected = useRef(false)
+  useEffect(() => {
+    if (connection.status === "connected" && !wasConnected.current) haptics.success()
+    wasConnected.current = connection.status === "connected"
+  }, [connection.status])
 
   const [showManual, setShowManual] = useState(false)
   const [sessionLayout, setSessionLayout] = useState<SessionLayout>("compact")
@@ -90,6 +164,12 @@ export default function App() {
   const [startDraft, setStartDraft] = useState<{ agent?: string; model?: { providerID: string; id: string } } | null>(null)
 
   const scrollRef = useRef<ScrollView>(null)
+  const themeListRef = useRef<ScrollView>(null)
+  const framesRef = useRef<Record<string, { y: number; height: number }>>({})
+  const visibleRef = useRef<Set<string>>(new Set())
+  const lastVisibilityRef = useRef(0)
+  const [visibleSessionIDs, setVisibleSessionIDs] = useState<Set<string>>(new Set())
+  const appVersion = Constants.expoConfig?.version ?? "0.1.1"
   const offsetRef = useRef(0)
   const waitingYRef = useRef(0)
   const markWaiting = useCallback((event: LayoutChangeEvent) => {
@@ -139,10 +219,35 @@ export default function App() {
     }
   }, [])
 
+  const registerFrame = useCallback((id: string, y: number, height: number) => {
+    framesRef.current[id] = { y: y + offsetRef.current, height }
+    updateVisible(offsetRef.current)
+  }, [])
+
+  const updateVisible = useCallback((offset: number) => {
+    const now = Date.now()
+    if (now - lastVisibilityRef.current < 100) return
+    lastVisibilityRef.current = now
+    const height = Dimensions.get("window").height
+    const next = new Set<string>()
+    for (const [id, frame] of Object.entries(framesRef.current)) {
+      if (frame.y + frame.height > offset && frame.y < offset + height) next.add(id)
+    }
+    if (next.size !== visibleRef.current.size || [...next].some((id) => !visibleRef.current.has(id))) {
+      visibleRef.current = next
+      setVisibleSessionIDs(next)
+    }
+  }, [])
+
   const openSwitcher = useCallback(
     async (session: Session) => {
       setSwitcherSession(session)
-      setSwitchOptions(await loadOptions())
+      setOptionsLoading(true)
+      try {
+        setSwitchOptions(await loadOptions())
+      } finally {
+        setOptionsLoading(false)
+      }
     },
     [loadOptions],
   )
@@ -150,19 +255,26 @@ export default function App() {
   // Start a session: ask for a mode and a model first (skip a step when the bridge
   // reports none), then create the session with the selection.
   const beginStart = useCallback(async () => {
-    const options = await loadOptions()
-    setSwitchOptions(options)
-    if (options.agents.length === 0 && options.models.length === 0) {
-      await startSession()
-      return
+    if (starting) return
+    setStarting(true)
+    try {
+      const options = await loadOptions()
+      setSwitchOptions(options)
+      if (options.agents.length === 0 && options.models.length === 0) {
+        await startSession()
+        return
+      }
+      setStartDraft({})
+    } finally {
+      setStarting(false)
     }
-    setStartDraft({})
-  }, [loadOptions, startSession])
+  }, [loadOptions, startSession, starting])
 
   const confirmPending = useCallback(async () => {
     const action = confirmAction
     setConfirmAction(null)
     if (!action) return
+    haptics.commit()
     if (action.kind === "stop" && action.sessionID) await stopSession(action.sessionID)
     else if (action.kind === "close" && action.sessionID) await closeSession(action.sessionID)
   }, [confirmAction, stopSession, closeSession])
@@ -184,7 +296,7 @@ export default function App() {
   const orphanPending = pending.filter((request) => !appState.sessions[request.sessionID]).reverse()
   const firstWaitingSessionID = sessions.find((session) => (pendingBySession[session.id] ?? []).length > 0)?.id
 
-  const sessionCard = (session: Session, onCollapse?: () => void) => (
+  const sessionCard = (session: Session, onCollapse?: () => void, attentionActive = true, avatarAnimated = true) => (
     <SessionCard
       session={session}
       requests={pendingBySession[session.id] ?? []}
@@ -197,8 +309,21 @@ export default function App() {
       onClose={(sessionID) => setConfirmAction({ kind: "close", sessionID })}
       onOpenSwitcher={(value) => void openSwitcher(value)}
       onCollapse={onCollapse}
+      attentionActive={attentionActive}
+      avatarAnimated={avatarAnimated}
     />
   )
+
+  const themeFade = useRef(new Animated.Value(1)).current
+  const firstTheme = useRef(true)
+  useEffect(() => {
+    if (firstTheme.current) {
+      firstTheme.current = false
+      return
+    }
+    themeFade.setValue(0.92)
+    Animated.timing(themeFade, { toValue: 1, duration: DURATION.base, easing: EASE.out, useNativeDriver: true }).start()
+  }, [theme.skin, theme.variant, themeFade])
 
   const statusColor =
     connection.status === "connected"
@@ -228,24 +353,70 @@ export default function App() {
   }))
   // Three cards fully + half a card: cardHeight = (boxHeight - gaps) / 3.5.
   const themeCardHeight = themesBoxHeight > 0 ? (themesBoxHeight - THEME_GAP * 3) / 3.5 : 84
+  const previewStylesBySkin = useMemo(() => {
+    const map = new Map<SkinId, ReturnType<typeof createStyles>>()
+    for (const entry of SKINS) {
+      const preview = entry.options.some((option) => option.id === "system")
+        ? entry.resolve("system", theme.dark ? "dark" : "light")
+        : entry.resolve((entry.options.find((option) => entry.resolve(option.id, systemScheme).dark === theme.dark) ?? entry.options[0]).id, systemScheme)
+      map.set(entry.id, createStyles(preview))
+    }
+    return map
+  }, [theme.dark, systemScheme])
 
   const selectTheme = (next: SkinId) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+    haptics.selection()
     const selection = themeSelection(next, systemScheme)
     void setSkinAndOption(selection.skin, selection.option)
   }
   const buyTip = (id: string) => {
+    if (buyingTip) return
     setTipError(null)
-    void tipStore.buy(id).then((result) => {
-      if (result.status === "error") setTipError(result.error ?? "Purchase failed.")
-    })
+    setBuyingTip(id)
+    void tipStore
+      .buy(id)
+      .then((result) => {
+        if (result.status === "error") {
+          haptics.error()
+          setTipError(result.error ?? "Purchase failed. Try again.")
+        } else {
+          haptics.success()
+        }
+      })
+      .finally(() => setBuyingTip(null))
   }
 
   return (
+    <Animated.View style={[styles.root, { opacity: themeFade }]}>
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
       <StatusBar style={theme.dark ? "light" : "dark"} />
       <ScreenBackdrop theme={theme} />
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScroll={(event) => { const y = event.nativeEvent.contentOffset.y; offsetRef.current = y; heroScrollY.setValue(y) }} scrollEventThrottle={16}>
+      <Animated.ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true)
+              void refresh().finally(() => setRefreshing(false))
+            }}
+            tintColor={theme.accent}
+          />
+        }
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: heroScrollY } } }], {
+          useNativeDriver: true,
+          listener: (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+            offsetRef.current = event.nativeEvent.contentOffset.y
+            updateVisible(offsetRef.current)
+          },
+        })}
+        scrollEventThrottle={16}
+      >
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
             <ThemeMark theme={theme} />
@@ -256,30 +427,53 @@ export default function App() {
           </PressableScale>
         </View>
 
-        <PressableScale onPress={paired ? () => setConfirmDisconnect(true) : undefined} accessibilityLabel="Connection">
-          <View style={styles.statusPill}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={styles.statusPill} accessible accessibilityLabel={`Connection: ${connectionLabel(connection.status, connection.macName)}`}>
             <GlowDot color={statusColor} size={8} pulse={connection.status === "connecting" || connection.status === "discovering"} glyph={theme.skin === "terminal"} />
-            <Text style={styles.statusText}>
-              {connection.status}
-              {connection.macName ? ` · ${connection.macName}` : ""}
-            </Text>
+            <Text style={styles.statusText}>{connectionLabel(connection.status, connection.macName)}</Text>
           </View>
-        </PressableScale>
-        {connection.error ? <Text style={styles.error}>{connection.error}</Text> : null}
+          {paired && connection.status !== "connected" ? (
+            <PressableScale onPress={() => void connect(true)} accessibilityLabel={CTA.reconnect}>
+              <Text style={styles.settingsLink}>{CTA.reconnect}</Text>
+            </PressableScale>
+          ) : null}
+        </View>
+        {paired && lastUpdatedAt > 0 ? (
+          <Text style={stale ? styles.error : styles.hint}>Updated {relativeTime(nowTick - lastUpdatedAt)}{stale ? " · pull to refresh" : ""}</Text>
+        ) : null}
+        {connection.error ? <Text style={styles.error} accessibilityLiveRegion="polite">{connection.error}</Text> : null}
 
         <Animated.View
           onLayout={(event) => {
             const { y, height } = event.nativeEvent.layout
             setHeroLayout((prev) => (prev && prev.y === y && prev.height === height ? prev : { y, height }))
           }}
-          style={[styles.heroWrap, { opacity: heroExpandedOpacity, transform: [{ scale: heroExpandedScale }, { translateY: heroExpandedTranslate }] }]}
+          style={[
+            styles.heroWrap,
+            reduceMotion
+              ? null
+              : { opacity: heroExpandedOpacity, transform: [{ scale: heroExpandedScale }, { translateY: heroExpandedTranslate }] },
+          ]}
         >
-          <HeroCard agg={agg} theme={theme} styles={styles} onStart={() => void beginStart()} onReviewWaiting={scrollToWaiting} />
+          <HeroCard agg={agg} theme={theme} styles={styles} starting={starting} onStart={() => void beginStart()} onReviewWaiting={scrollToWaiting} />
         </Animated.View>
 
         {!paired ? (
           <View style={styles.connectBlock}>
-            <GradientButton label="Find nearby computer" onPress={() => void connect(true)} styles={styles} colors={theme.accentGradient} />
+            <View style={styles.setupCard}>
+              <Text style={styles.setupTitle}>Connect this phone to your Mac</Text>
+              <Text style={styles.setupStep}>1. Install and run the OpenCode informer helper on your Mac.</Text>
+              <Text style={styles.setupStep}>2. Keep this phone and the Mac on the same network.</Text>
+              <Text style={styles.setupStep}>3. Connect below; a short pairing code finishes setup.</Text>
+              <Text style={styles.link} accessibilityRole="link" onPress={() => void Linking.openURL(SETUP_URL)}>Open the setup guide</Text>
+              <Text style={styles.fieldDescription}>We ask for Bluetooth and local network access only to find and reach your Mac.</Text>
+            </View>
+            <GradientButton
+              label={connection.status === "discovering" || connection.status === "connecting" ? "Searching…" : "Find nearby computer"}
+              onPress={() => void connect(true)}
+              styles={styles}
+              colors={theme.accentGradient}
+            />
             <Text style={styles.hint}>
               {connection.status === "discovering" || connection.status === "connecting"
                 ? "Searching for the computer over Bluetooth…"
@@ -302,8 +496,8 @@ export default function App() {
             <Text style={styles.section}>Needs attention</Text>
             {orphanPending.map((request, index) => (
               <View key={request.requestID} onLayout={index === 0 ? markWaiting : undefined}>
-                <FadeIn delay={index * 50} style={styles.cardGap}>
-                  <NeedsAttentionCard request={request} resolve={resolve} theme={theme} styles={styles} onFieldFocus={focusField} />
+                <FadeIn delay={Math.min(index * 50, 150)} style={styles.cardGap}>
+                  <NeedsAttentionCard request={request} resolve={resolve} theme={theme} styles={styles} onFieldFocus={focusField} attentionActive={index === 0} />
                 </FadeIn>
               </View>
             ))}
@@ -317,17 +511,27 @@ export default function App() {
         {sessions.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.empty}>No active sessions</Text>
-            <Text style={styles.emptyHint}>Start an agent, or preview how the cards look.</Text>
-            <GradientButton label="Try demo" onPress={() => setShowDemo(true)} styles={styles} colors={theme.accentGradient} />
+            <Text style={styles.emptyHint}>{paired ? "Start an OpenCode agent on your Mac, or try the demo." : "Connect to your Mac to see its OpenCode agents."}</Text>
+            <View style={styles.demoActions}>
+              {paired ? (
+                <GradientButton label={starting ? "Starting…" : CTA.start} onPress={() => void beginStart()} styles={styles} colors={theme.accentGradient} />
+              ) : null}
+              <GradientButton label={CTA.demo} onPress={() => setShowDemo(true)} styles={styles} colors={theme.accentGradient} />
+            </View>
           </View>
         ) : null}
         {sessionLayout === "full"
           ? sessions.map((session, index) => (
-              <View key={session.id} onLayout={orphanPending.length === 0 && session.id === firstWaitingSessionID ? markWaiting : undefined}>
-                <FadeIn delay={index * 50} style={styles.cardGap}>
-                  {sessionCard(session)}
+              <MeasuredCard
+                key={session.id}
+                id={session.id}
+                onFrame={registerFrame}
+                onLayout={orphanPending.length === 0 && session.id === firstWaitingSessionID ? markWaiting : undefined}
+              >
+                <FadeIn delay={Math.min(index * 50, 150)} style={styles.cardGap}>
+                  {sessionCard(session, undefined, session.id === firstWaitingSessionID, visibleSessionIDs.size === 0 || visibleSessionIDs.has(session.id))}
                 </FadeIn>
-              </View>
+              </MeasuredCard>
             ))
           : (
               <SessionGrid styles={styles}>
@@ -337,37 +541,48 @@ export default function App() {
                     const pending = requests.length > 0
                     const expanded = sessionPresentation({ layout: sessionLayout, expandedSessionID, sessionID: session.id }) === "full"
                     return (
-                      <View
+                      <MeasuredCard
                         key={session.id}
+                        id={session.id}
                         style={{ width: expanded ? "100%" : itemWidth ?? "48%" }}
+                        onFrame={registerFrame}
                         onLayout={orphanPending.length === 0 && session.id === firstWaitingSessionID ? markWaiting : undefined}
                       >
-                        <FadeIn delay={index * 50} style={styles.titleGrow}>
+                        <FadeIn delay={Math.min(index * 50, 150)} style={styles.titleGrow}>
                           {expanded ? (
-                            sessionCard(session, () => setExpandedSessionID(null))
+                            sessionCard(session, () => setExpandedSessionID(null), session.id === firstWaitingSessionID)
                           ) : (
                             <CompactSessionCard
                               session={session}
                               request={requests[0]}
                               theme={theme}
                               styles={styles}
-                              onOpen={() => setExpandedSessionID(toggleExpanded(expandedSessionID, session.id))}
+                              attentionActive={session.id === firstWaitingSessionID}
+                              avatarAnimated={visibleSessionIDs.size === 0 || visibleSessionIDs.has(session.id)}
+                              onOpen={() => {
+                                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+                                setExpandedSessionID(toggleExpanded(expandedSessionID, session.id))
+                              }}
                             />
                           )}
                         </FadeIn>
-                      </View>
+                      </MeasuredCard>
                     )
                   })
                 }
               </SessionGrid>
             )}
         {keyboardHeight > 0 ? <View style={{ height: keyboardHeight + 24 }} /> : null}
-      </ScrollView>
+      </Animated.ScrollView>
       </KeyboardAvoidingView>
 
       <Animated.View
         pointerEvents="none"
-        style={[styles.compactHero, { opacity: heroCompactOpacity, transform: [{ translateY: heroCompactTranslate }] }]}
+        style={[
+          styles.compactHero,
+          { paddingTop: insets.top + 6 },
+          reduceMotion ? { opacity: 0 } : { opacity: heroCompactOpacity, transform: [{ translateY: heroCompactTranslate }] },
+        ]}
       >
         <CompactHero agg={agg} server={connection.macName} connected={connection.status === "connected"} theme={theme} styles={styles} />
       </Animated.View>
@@ -376,7 +591,7 @@ export default function App() {
         <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
           <ScreenBackdrop theme={theme} />
           <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.headerRow}>
               <Text style={styles.title}>Settings</Text>
               <PressableScale onPress={() => setShowSettings(false)} accessibilityLabel="Done">
@@ -384,13 +599,56 @@ export default function App() {
               </PressableScale>
             </View>
 
+            <Text style={styles.section}>Connection</Text>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Status</Text>
+              <Text style={styles.about}>{connectionLabel(connection.status, connection.macName)}</Text>
+            </View>
+            {paired && connection.status !== "connected" ? (
+              <PressableScale onPress={() => void connect(true)} accessibilityLabel={CTA.reconnect}>
+                <View style={styles.rowButton}>
+                  <Text style={styles.rowButtonText}>{CTA.reconnect}</Text>
+                  <Text style={styles.chevron}>›</Text>
+                </View>
+              </PressableScale>
+            ) : null}
+            {paired ? (
+              <PressableScale onPress={() => setConfirmDisconnect(true)} accessibilityLabel="Disconnect from this computer">
+                <View style={styles.rowButton}>
+                  <Text style={styles.rowButtonText}>Disconnect</Text>
+                  <Text style={styles.chevron}>›</Text>
+                </View>
+              </PressableScale>
+            ) : (
+              <Text style={styles.fieldDescription}>Connect to your Mac from the dashboard; this page is for settings that apply once paired.</Text>
+            )}
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Lock Screen activity</Text>
+              <Switch
+                value={liveActivityEnabled}
+                accessibilityLabel="Lock Screen activity"
+                onValueChange={(value) => {
+                  if (!value) {
+                    void setLiveActivityOn(false)
+                    return
+                  }
+                  void requestNotificationPermission().then((granted) => {
+                    if (granted) void setLiveActivityOn(true)
+                  })
+                }}
+              />
+            </View>
+            <Text style={styles.fieldDescription}>
+              Shows a Live Activity with agent status. Allows notifications while the app is closed; you can change this in iOS Settings.
+            </Text>
+
             <Text style={styles.section}>Appearance</Text>
             <Text style={styles.fieldLabel}>Theme</Text>
             <View
               onLayout={(event) => setThemesBoxHeight(event.nativeEvent.layout.height)}
               style={[styles.themesFrame, { borderColor: theme.border }]}
             >
-              <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled contentContainerStyle={{ gap: THEME_GAP }}>
+              <ScrollView ref={themeListRef} showsVerticalScrollIndicator={false} nestedScrollEnabled contentContainerStyle={{ gap: THEME_GAP }} onContentSizeChange={() => { const index = SKINS.findIndex((entry) => entry.id === skin); if (index > 0) themeListRef.current?.scrollTo({ y: index * (themeCardHeight + THEME_GAP), animated: false }) }}>
                 {SKINS.map((entry) => {
                   const preview = entry.options.some((o) => o.id === "system")
                     ? entry.resolve("system", theme.dark ? "dark" : "light")
@@ -398,19 +656,21 @@ export default function App() {
                   const selected = skin === entry.id
                   // Render the thumbnail with the previewed theme's own tokens so its
                   // corner style (rounded vs square) is visible in the list.
-                  const previewStyles = createStyles(preview)
+                  const previewStyles = previewStylesBySkin.get(entry.id) ?? createStyles(preview)
                   return (
                     <TouchableOpacity
                       key={entry.id}
-                      style={[styles.themeCard, { height: themeCardHeight }, selected ? styles.themeCardSelected : null]}
+                      style={[styles.themeCard, { minHeight: themeCardHeight }, selected ? styles.themeCardSelected : null]}
                       onPress={() => selectTheme(entry.id)}
                       activeOpacity={0.85}
-                      accessibilityLabel={`Theme ${entry.name}`}
+                      accessibilityLabel={`Theme ${entry.name}, ${entry.description}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
                     >
                       <View style={styles.themeCardMain}>
-                        <Text style={styles.themeCardText} numberOfLines={1}>{entry.name}</Text>
+                        <Text style={styles.themeCardText} numberOfLines={1} maxFontSizeMultiplier={1.4}>{entry.name}</Text>
                         {entry.description.split(" · ").map((line, index) => (
-                          <Text key={index} style={styles.themeCardDesc} numberOfLines={1}>{line}</Text>
+                          <Text key={index} style={styles.themeCardDesc} numberOfLines={1} maxFontSizeMultiplier={1.4}>{line}</Text>
                         ))}
                       </View>
                       <View style={styles.themeCardRight}>
@@ -438,7 +698,19 @@ export default function App() {
               {skinDef(skin).options.map((option) => {
                 const active = themeOption === option.id
                 return (
-                  <TouchableOpacity key={option.id} style={styles.segmentItem} onPress={() => void setThemeOption(option.id)} activeOpacity={0.8}>
+                  <TouchableOpacity
+                    key={option.id}
+                    style={styles.segmentItem}
+                    onPress={() => {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+                      haptics.selection()
+                      void setThemeOption(option.id)
+                    }}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={option.name}
+                    accessibilityState={{ selected: active }}
+                  >
                     {active ? (
                       <LinearGradient colors={theme.accentGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.segmentSelected}>
                         <Text style={styles.segmentTextSelected}>{option.name}</Text>
@@ -463,6 +735,25 @@ export default function App() {
                       ? "Bash shell interface — monochrome with colored indicators."
                       : "Light, Dark, or follow your iPhone's setting."}
             </Text>
+            <PressableScale
+              onPress={() => {
+                setShowSettings(false)
+                setShowPreview(true)
+              }}
+              accessibilityLabel="Preview this theme"
+            >
+              <View style={styles.rowButton}>
+                <Text style={styles.rowButtonText}>Preview this theme</Text>
+                <Text style={styles.chevron}>›</Text>
+              </View>
+            </PressableScale>
+
+            <Text style={styles.section}>This phone</Text>
+            <Text style={styles.fieldLabel}>Device name</Text>
+            <Text style={styles.about}>{deviceName}</Text>
+            <Text style={styles.fieldDescription}>
+              The name the Mac shows when this phone pairs — taken from iOS.
+            </Text>
 
             <Text style={styles.section}>Support development</Text>
             <Text style={styles.fieldDescription}>
@@ -478,53 +769,50 @@ export default function App() {
                   </View>
                   <Pressable
                     onPress={() => buyTip(tip.id)}
+                    disabled={buyingTip !== null}
                     accessibilityRole="button"
-                    accessibilityLabel={`Buy tip ${tip.price}`}
-                    style={[styles.tipBuyBtn, tip.recommended ? styles.tipBuyBtnFilled : null]}
+                    accessibilityLabel={buyingTip === tip.id ? "Purchase in progress" : `Buy tip ${tip.price}`}
+                    accessibilityState={{ busy: buyingTip === tip.id, disabled: buyingTip !== null }}
+                    style={[styles.tipBuyBtn, tip.recommended ? styles.tipBuyBtnFilled : null, buyingTip !== null ? { opacity: 0.6 } : null]}
                   >
-                    <Text style={[styles.tipCardPrice, tip.recommended ? { color: theme.skin === "terminal" ? theme.background : "#ffffff" } : null]}>{tip.price}</Text>
+                    <Text style={[styles.tipCardPrice, tip.recommended ? { color: readableInk(theme.accent) } : null]}>{buyingTip === tip.id ? "…" : tip.price}</Text>
                   </Pressable>
                 </View>
               ))}
             </View>
-            {tipError ? <Text style={styles.error}>{tipError}</Text> : null}
+            {tipError ? <Text style={styles.error} accessibilityLiveRegion="polite">{tipError}</Text> : null}
 
-            <Text style={styles.section}>Connection</Text>
-            <View style={styles.settingRow}>
-              <Text style={styles.settingLabel}>Lock Screen activity</Text>
-              <Switch value={liveActivityEnabled} onValueChange={(value) => void setLiveActivityOn(value)} />
-            </View>
-
-            <Text style={styles.section}>This phone</Text>
-            <Text style={styles.fieldLabel}>Device name</Text>
-            <Text style={styles.about}>{deviceName}</Text>
-            <Text style={styles.fieldDescription}>
-              The name the Mac shows when this phone pairs — taken from iOS.
-            </Text>
-
-            <Text style={styles.section}>Diagnostics</Text>
-            <Text style={styles.about}>{diagnostic ?? "No issues recorded."}</Text>
-            <Text style={styles.fieldDescription}>
-              Recorded locally to help diagnose unexpected app terminations.
-            </Text>
 
             <Text style={styles.section}>About</Text>
             <Text style={styles.about}>{APP_DESCRIPTION}</Text>
-            <Text style={styles.about}>Version 0.1.1</Text>
-
-            <Text style={styles.section}>Demo</Text>
-            <PressableScale
-              onPress={() => {
-                setShowSettings(false)
-                setShowDemo(true)
-              }}
-              accessibilityLabel="Try the demo"
-            >
+            <Text style={styles.about}>Version {appVersion}</Text>
+            <PressableScale onPress={() => void Linking.openURL(PRIVACY_URL)} accessibilityLabel="Privacy policy">
               <View style={styles.rowButton}>
-                <Text style={styles.rowButtonText}>Try the demo</Text>
+                <Text style={styles.rowButtonText}>Privacy policy</Text>
                 <Text style={styles.chevron}>›</Text>
               </View>
             </PressableScale>
+            <Text style={styles.section}>Diagnostics</Text>
+            <PressableScale onPress={() => setShowDiagnostics((value) => !value)} accessibilityLabel={showDiagnostics ? "Hide diagnostics" : "Show diagnostics"} accessibilityState={{ expanded: showDiagnostics }}>
+              <View style={styles.rowButton}>
+                <Text style={styles.rowButtonText}>{showDiagnostics ? "Hide diagnostics" : "Show diagnostics"}</Text>
+                <Text style={styles.chevron}>{showDiagnostics ? "⌄" : "›"}</Text>
+              </View>
+            </PressableScale>
+            {showDiagnostics ? (
+              <>
+                <Text style={styles.about}>{diagnostic ?? "No issues recorded."}</Text>
+                <Text style={styles.fieldDescription}>
+                  Recorded locally to help diagnose unexpected app terminations.
+                </Text>
+                <PressableScale onPress={() => void Clipboard.setStringAsync(diagnostic ?? "")} accessibilityLabel="Copy diagnostics">
+                  <View style={styles.rowButton}>
+                    <Text style={styles.rowButtonText}>Copy diagnostics</Text>
+                  </View>
+                </PressableScale>
+              </>
+            ) : null}
+
           </ScrollView>
           </KeyboardAvoidingView>
         </LinearGradient>
@@ -630,6 +918,7 @@ export default function App() {
         }}
         theme={theme}
         styles={styles}
+        loading={optionsLoading}
       />
 
       <Modal visible={showDemo} animationType="slide" onRequestClose={() => setShowDemo(false)}>
@@ -644,5 +933,6 @@ export default function App() {
         />
       </Modal>
     </LinearGradient>
+    </Animated.View>
   )
 }

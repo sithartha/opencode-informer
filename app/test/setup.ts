@@ -26,3 +26,17 @@ jest.mock("moodstone", () => {
       }),
   }
 })
+
+// Safe-area insets are provided by the native provider in the app; tests use zero insets.
+jest.mock("react-native-safe-area-context", () => {
+  const React = require("react")
+  const actual = jest.requireActual("react-native-safe-area-context")
+  const insets = { top: 0, bottom: 0, left: 0, right: 0 }
+  return {
+    ...actual,
+    SafeAreaProvider: ({ children }: { children: unknown }) => React.createElement(React.Fragment, null, children),
+    SafeAreaView: ({ children }: { children: unknown }) => React.createElement(React.Fragment, null, children),
+    useSafeAreaInsets: () => insets,
+    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
+  }
+})

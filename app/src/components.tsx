@@ -1,10 +1,12 @@
 import { useRef, useState, type ReactNode } from "react"
-import { Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native"
+import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { PendingRequest, Question, QuestionOption, Session } from "./events"
 import { optionValue } from "./events"
 import type { Aggregate } from "./aggregate"
 import type { Theme } from "./theme"
+import { readableInk } from "./theme"
 import { dirName } from "./paths"
 import { formatCost } from "./format"
 import { FadeIn, GlowDot, GradientSurface, HazardBar, PressableScale, Scanlines, TelemetryBars } from "./ui"
@@ -12,6 +14,8 @@ import { ThemeMark } from "./themeMark"
 import { ScreenBackdrop } from "./terminalArt"
 import { AgentAvatar } from "./AgentAvatar"
 import type { Styles } from "./styles"
+import { phaseLabel } from "./copy"
+import { haptics } from "./haptics"
 
 export const PHASE_COLORS: Record<string, string> = {
   running: "#2e7d32",
@@ -32,6 +36,11 @@ export function phaseColor(theme: Theme, phase: string): string {
 /** The Terminal skin keeps action buttons monochrome; other skins keep their semantic fill. */
 function actionFill(theme: Theme, semantic: string): string {
   return theme.skin === "terminal" ? theme.text : semantic
+}
+
+/** The label colour for a filled action button; terminal keeps ink/paper inversion. */
+function actionLabel(theme: Theme, fill: string): string {
+  return theme.skin === "terminal" ? (fill === theme.text ? theme.background : theme.text) : readableInk(fill)
 }
 
 export type Resolve = (id: string, action: string, answers?: Record<string, string | string[]>) => void
@@ -69,7 +78,7 @@ export function GradientButton({ label, onPress, styles, colors }: { label: stri
   return (
     <PressableScale onPress={onPress} accessibilityLabel={label}>
       <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradientButton}>
-        <Text style={styles.gradientButtonText}>{label}</Text>
+        <Text style={[styles.gradientButtonText, { color: readableInk(colors[0]) }]}>{label}</Text>
       </LinearGradient>
     </PressableScale>
   )
@@ -139,7 +148,7 @@ export function InlineInput({
       />
       <PressableScale onPress={submit} accessibilityLabel={submitLabel}>
         <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.option) }]}>
-          <Text style={styles.actionText}>{submitLabel}</Text>
+          <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.option)) }]}>{submitLabel}</Text>
         </View>
       </PressableScale>
     </View>
@@ -169,7 +178,7 @@ export function LinkText({
     <Text style={style} numberOfLines={numberOfLines}>
       {parts.map((part, index) =>
         isLink(part) ? (
-          <Text key={index} style={styles.link} onPress={() => void Linking.openURL(part)}>
+          <Text key={index} style={styles.link} accessibilityRole="link" onPress={() => void Linking.openURL(part)}>
             {part}
           </Text>
         ) : (
@@ -196,7 +205,12 @@ export function ExpandableText({
   const [expanded, setExpanded] = useState(false)
   const canExpand = text.length > threshold
   return (
-    <TouchableOpacity activeOpacity={canExpand ? 0.7 : 1} onPress={() => canExpand && setExpanded((value) => !value)}>
+    <TouchableOpacity
+      activeOpacity={canExpand ? 0.7 : 1}
+      onPress={() => canExpand && setExpanded((value) => !value)}
+      accessibilityRole={canExpand ? "button" : undefined}
+      accessibilityState={canExpand ? { expanded } : undefined}
+    >
       <LinkText text={text} style={style} numberOfLines={expanded ? undefined : numberOfLines} styles={styles} />
       {canExpand ? <Text style={styles.moreLink}>{expanded ? "less" : "more"}</Text> : null}
     </TouchableOpacity>
@@ -222,9 +236,13 @@ function OptionButton({
   return (
     <View style={styles.optionRow}>
       <View style={styles.optionButtonWrap}>
-        <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
+        <PressableScale
+          onPress={onPress}
+          accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ selected: selected !== false }}
+        >
           <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.option), opacity }]}>
-            <Text style={styles.actionText}>{option.label}</Text>
+            <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.option)) }]}>{option.label}</Text>
           </View>
         </PressableScale>
       </View>
@@ -283,7 +301,7 @@ export function MultiSelectQuestion({
                 key={option.label}
                 option={option}
                 selected={selected.includes(value)}
-                onPress={() => toggle(value)}
+                onPress={() => { haptics.selection(); toggle(value) }}
                 accessibilityLabel={`${question.title}: ${option.label}`}
                 theme={theme}
                 styles={styles}
@@ -303,6 +321,7 @@ export function MultiSelectQuestion({
           textColor={theme.questionText}
         />
       ) : null}
+      {!complete ? <Text style={styles.fieldDescription}>Choose at least one answer to continue.</Text> : null}
       <View style={styles.actions}>
         <PressableScale
           disabled={!complete}
@@ -310,7 +329,7 @@ export function MultiSelectQuestion({
           accessibilityLabel="Submit answers"
         >
           <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow), opacity: complete ? 1 : 0.5 }]}>
-            <Text style={styles.actionText}>Submit</Text>
+            <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.allow)) }]}>Submit</Text>
           </View>
         </PressableScale>
       </View>
@@ -382,6 +401,7 @@ export function MultiQuestionForm({
           </View>
         )
       })}
+      {!complete ? <Text style={styles.fieldDescription}>Answer every question to continue.</Text> : null}
       <View style={styles.actions}>
         <PressableScale
           disabled={!complete}
@@ -389,7 +409,7 @@ export function MultiQuestionForm({
           accessibilityLabel="Submit answers"
         >
           <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow), opacity: complete ? 1 : 0.5 }]}>
-            <Text style={styles.actionText}>Submit</Text>
+            <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.allow)) }]}>Submit</Text>
           </View>
         </PressableScale>
       </View>
@@ -413,14 +433,14 @@ export function PendingActions({
   if (request.kind === "permission") {
     return (
       <View style={styles.actions}>
-        <PressableScale onPress={() => resolve(request.requestID, "allow")} accessibilityLabel="Allow">
+        <PressableScale onPress={() => { haptics.impact(); resolve(request.requestID, "allow") }} accessibilityLabel="Allow">
           <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
-            <Text style={styles.actionText}>Allow</Text>
+            <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.allow)) }]}>Allow</Text>
           </View>
         </PressableScale>
-        <PressableScale onPress={() => resolve(request.requestID, "deny")} accessibilityLabel="Deny">
+        <PressableScale onPress={() => { haptics.impact(); resolve(request.requestID, "deny") }} accessibilityLabel="Deny">
           <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.deny) }]}>
-            <Text style={styles.actionText}>Deny</Text>
+            <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.deny)) }]}>Deny</Text>
           </View>
         </PressableScale>
       </View>
@@ -458,7 +478,7 @@ export function PendingActions({
             <OptionButton
               key={option.label}
               option={option}
-              onPress={() => resolve(request.requestID, optionValue(option))}
+              onPress={() => { haptics.impact(); resolve(request.requestID, optionValue(option)) }}
               accessibilityLabel={option.label}
               theme={theme}
               styles={styles}
@@ -487,12 +507,14 @@ export function HeroCard({
   styles,
   onStart,
   onReviewWaiting,
+  starting = false,
 }: {
   agg: Aggregate
   theme: Theme
   styles: Styles
   onStart?: () => void
   onReviewWaiting?: () => void
+  starting?: boolean
 }) {
   const needsYou = agg.waitingApproval + agg.waitingAnswer
   const hasAttention = needsYou > 0
@@ -760,9 +782,14 @@ export function HeroCard({
               />
             ) : null}
             {onStart ? (
-              <PressableScale onPress={onStart} accessibilityLabel="Start a new session">
+              <PressableScale
+                onPress={onStart}
+                disabled={starting}
+                accessibilityLabel={starting ? "Starting a session" : "Start a new session"}
+                accessibilityState={{ busy: starting, disabled: starting }}
+              >
                 <View style={styles.heroSecondary}>
-                  <Text style={styles.heroSecondaryText}>New session</Text>
+                  <Text style={styles.heroSecondaryText}>{starting ? "Starting…" : "New session"}</Text>
                 </View>
               </PressableScale>
             ) : null}
@@ -857,7 +884,7 @@ export function ConfirmModal({
             </PressableScale>
             <PressableScale onPress={onConfirm} accessibilityLabel={confirmLabel}>
               <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.deny) }]}>
-                <Text style={styles.actionText}>{confirmLabel}</Text>
+                <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.deny)) }]}>{confirmLabel}</Text>
               </View>
             </PressableScale>
           </View>
@@ -878,6 +905,7 @@ export function SwitcherModal({
   onClose,
   theme,
   styles,
+  loading = false,
 }: {
   visible: boolean
   agents: string[]
@@ -889,19 +917,33 @@ export function SwitcherModal({
   onClose: () => void
   theme: Theme
   styles: Styles
+  loading?: boolean
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.confirmBackdrop}>
         <View style={[styles.confirmCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Text style={styles.confirmTitle}>Mode &amp; model</Text>
+          {loading ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 24 }}>
+              <ActivityIndicator color={theme.textMuted} />
+              <Text style={styles.empty}>Loading modes and models…</Text>
+            </View>
+          ) : (
           <ScrollView style={styles.switcherScroll}>
             <Text style={styles.section}>Mode</Text>
             {agents.length === 0 ? (
               <Text style={styles.empty}>No modes reported</Text>
             ) : (
               agents.map((agent) => (
-                <TouchableOpacity key={agent} style={styles.switcherItem} onPress={() => onSelectAgent(agent)}>
+                <TouchableOpacity
+                  key={agent}
+                  style={styles.switcherItem}
+                  onPress={() => onSelectAgent(agent)}
+                  accessibilityRole="button"
+                  accessibilityLabel={agent}
+                  accessibilityState={{ selected: agent === currentAgent }}
+                >
                   <Text style={[styles.switcherItemText, agent === currentAgent ? { color: theme.accent } : null]}>{agent}</Text>
                   {agent === currentAgent ? <Text style={styles.switcherCheck}>✓</Text> : null}
                 </TouchableOpacity>
@@ -914,7 +956,14 @@ export function SwitcherModal({
               models.map((model) => {
                 const label = `${model.providerID}/${model.id}`
                 return (
-                  <TouchableOpacity key={label} style={styles.switcherItem} onPress={() => onSelectModel({ providerID: model.providerID, id: model.id })}>
+                  <TouchableOpacity
+                    key={label}
+                    style={styles.switcherItem}
+                    onPress={() => onSelectModel({ providerID: model.providerID, id: model.id })}
+                    accessibilityRole="button"
+                    accessibilityLabel={label}
+                    accessibilityState={{ selected: label === currentModel }}
+                  >
                     <Text style={[styles.switcherItemText, label === currentModel ? { color: theme.accent } : null]}>{label}</Text>
                     {label === currentModel ? <Text style={styles.switcherCheck}>✓</Text> : null}
                   </TouchableOpacity>
@@ -922,6 +971,7 @@ export function SwitcherModal({
               })
             )}
           </ScrollView>
+          )}
           <View style={styles.confirmActions}>
             <PressableScale onPress={onClose} accessibilityLabel="Done">
               <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
@@ -952,6 +1002,18 @@ export function ManualConnectModal({
 }) {
   const [address, setAddress] = useState("")
   const [port, setPort] = useState("38963")
+  const [localError, setLocalError] = useState<string | null>(null)
+  const validate = (): string | null => {
+    if (!address.trim()) return "Enter the computer's address."
+    const value = Number(port)
+    if (!Number.isInteger(value) || value < 1 || value > 65535) return "Enter a port between 1 and 65535."
+    return null
+  }
+  const submit = () => {
+    const problem = validate()
+    setLocalError(problem)
+    if (!problem) onConnect(address.trim(), port)
+  }
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.confirmBackdrop}>
@@ -965,6 +1027,7 @@ export function ManualConnectModal({
             style={styles.inputFull}
             value={address}
             onChangeText={setAddress}
+            onBlur={() => setLocalError(validate())}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
@@ -977,21 +1040,22 @@ export function ManualConnectModal({
             style={styles.inputFull}
             value={port}
             onChangeText={setPort}
+            onBlur={() => setLocalError(validate())}
             keyboardType="number-pad"
             placeholder="38963"
             placeholderTextColor={theme.textMuted}
             accessibilityLabel="Port"
           />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error || localError ? <Text style={styles.error} accessibilityLiveRegion="polite">{error || localError}</Text> : null}
           <View style={styles.confirmActions}>
             <PressableScale onPress={onClose} accessibilityLabel="Cancel">
               <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
                 <Text style={[styles.actionText, { color: theme.text }]}>Cancel</Text>
               </View>
             </PressableScale>
-            <PressableScale onPress={() => onConnect(address, port)} accessibilityLabel="Connect">
+            <PressableScale onPress={submit} accessibilityLabel="Connect">
               <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
-                <Text style={styles.actionText}>Connect</Text>
+                <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.allow)) }]}>Connect</Text>
               </View>
             </PressableScale>
           </View>
@@ -1017,6 +1081,15 @@ export function PairingCodeModal({
   styles: Styles
 }) {
   const [code, setCode] = useState("")
+  const [localError, setLocalError] = useState<string | null>(null)
+  const submit = () => {
+    if (code.trim().length < 6) {
+      setLocalError("Enter the six-digit code shown on your Mac.")
+      return
+    }
+    setLocalError(null)
+    onSubmit(code.trim())
+  }
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.confirmBackdrop}>
@@ -1032,20 +1105,22 @@ export function PairingCodeModal({
             keyboardType="number-pad"
             autoCapitalize="none"
             autoCorrect={false}
+            autoFocus
+            maxLength={6}
             placeholder="123456"
             placeholderTextColor={theme.textMuted}
             accessibilityLabel="Pairing code"
           />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {error || localError ? <Text style={styles.error} accessibilityLiveRegion="polite">{error || localError}</Text> : null}
           <View style={styles.confirmActions}>
             <PressableScale onPress={onCancel} accessibilityLabel="Cancel">
               <View style={[styles.actionInner, { backgroundColor: theme.badgeBg }]}>
                 <Text style={[styles.actionText, { color: theme.text }]}>Cancel</Text>
               </View>
             </PressableScale>
-            <PressableScale onPress={() => onSubmit(code)} accessibilityLabel="Pair">
+            <PressableScale onPress={submit} accessibilityLabel="Pair">
               <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
-                <Text style={styles.actionText}>Pair</Text>
+                <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.allow)) }]}>Pair</Text>
               </View>
             </PressableScale>
           </View>
@@ -1144,6 +1219,8 @@ export function SessionCard({
   onClose,
   onOpenSwitcher,
   onCollapse,
+  attentionActive = true,
+  avatarAnimated = true,
 }: {
   session: Session
   requests: PendingRequest[]
@@ -1156,6 +1233,8 @@ export function SessionCard({
   onClose?: (sessionID: string) => void
   onOpenSwitcher?: (session: Session) => void
   onCollapse?: () => void
+  attentionActive?: boolean
+  avatarAnimated?: boolean
 }) {
   const request = requests[0]
   const isQuestion = request?.kind === "question"
@@ -1169,9 +1248,9 @@ export function SessionCard({
     <GradientSurface
       colors={border}
       glow={glow}
-      pulse={Boolean(request)}
-      shimmer={Boolean(request) && !isTerminal}
-      animatedBorder={Boolean(request) && !isTerminal}
+      pulse={Boolean(request) && attentionActive}
+      shimmer={Boolean(request) && attentionActive && !isTerminal}
+      animatedBorder={Boolean(request) && attentionActive && !isTerminal}
       radius={isTerminal ? 0 : theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
       nerv={theme.skin === "evangelion"}
       rail={theme.skin === "starwars"}
@@ -1186,7 +1265,7 @@ export function SessionCard({
             currentTool={session.currentTool}
             theme={theme}
             size={22}
-            animated
+            animated={avatarAnimated}
           />
           <GlowDot color="#ffffff" size={8} pulse={session.phase === "running"} />
           {onCollapse ? (
@@ -1200,7 +1279,7 @@ export function SessionCard({
               {session.title || dirName(session.cwd) || session.id}
             </Text>
           )}
-          <Text style={styles.osWindowPhase}>{session.phase}</Text>
+          <Text style={styles.osWindowPhase}>{phaseLabel(session.phase)}</Text>
           {(session.phase === "running" || session.phase === "waiting-permission" || session.phase === "waiting-answer") && onStop ? (
             <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
               <View style={styles.osCtlBtn}>
@@ -1235,7 +1314,7 @@ export function SessionCard({
               currentTool={session.currentTool}
               theme={theme}
               size={40}
-              animated
+              animated={avatarAnimated}
             />
             <GlowDot color={phaseColor(theme, session.phase)} size={9} pulse={session.phase === "running"} glyph={theme.skin === "terminal"} />
             {onCollapse ? (
@@ -1250,15 +1329,15 @@ export function SessionCard({
               </Text>
             )}
             {(session.phase === "running" || session.phase === "waiting-permission" || session.phase === "waiting-answer") && onStop ? (
-              <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
+              <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop" hitSlop={8}>
                 <View style={styles.stopButton}>
                   <Text style={styles.stopButtonText}>Stop</Text>
                 </View>
               </PressableScale>
             ) : null}
-            <Text style={styles.sessionPhase}>{session.phase}</Text>
+            <Text style={styles.sessionPhase}>{phaseLabel(session.phase)}</Text>
             {onClose ? (
-              <PressableScale onPress={() => onClose(session.id)} accessibilityLabel="Close session">
+              <PressableScale onPress={() => onClose(session.id)} accessibilityLabel="Close session" hitSlop={8}>
                 <Text style={styles.closeButton}>×</Text>
               </PressableScale>
             ) : null}
@@ -1276,8 +1355,8 @@ export function SessionCard({
         </View>
         <View style={styles.badges}>
           {session.currentTool ? <Text style={styles.badge}>tool · {session.currentTool}</Text> : null}
-          <Text style={styles.badge}>{session.subagents ?? 0} subagents</Text>
-          <Text style={styles.badge}>{session.shells ?? 0} shells</Text>
+          {(session.subagents ?? 0) > 0 ? <Text style={styles.badge}>{session.subagents} subagents</Text> : null}
+          {(session.shells ?? 0) > 0 ? <Text style={styles.badge}>{session.shells} shells</Text> : null}
         </View>
         <ActivityHistory session={session} theme={theme} styles={styles} expand={Boolean(request)} />
         {request ? (
@@ -1363,12 +1442,16 @@ export function CompactSessionCard({
   theme,
   styles,
   onOpen,
+  attentionActive = true,
+  avatarAnimated = true,
 }: {
   session: Session
   request?: PendingRequest
   theme: Theme
   styles: Styles
   onOpen: () => void
+  attentionActive?: boolean
+  avatarAnimated?: boolean
 }) {
   // The compact card is a directory-first overview: the working directory is what
   // tells sessions apart in the grid, so it replaces the session title.
@@ -1379,13 +1462,13 @@ export function CompactSessionCard({
   const glow = attention === "question" ? theme.questionGlow : attention === "permission" ? theme.permissionGlow : undefined
   const isTerminal = theme.skin === "terminal"
   return (
-    <PressableScale onPress={onOpen} accessibilityLabel={`${name}, ${session.phase}`} style={styles.titleGrow}>
+    <PressableScale onPress={onOpen} accessibilityLabel={`${name}, ${phaseLabel(session.phase)}`} style={styles.titleGrow}>
       <GradientSurface
         colors={colors}
         glow={glow}
-        pulse={Boolean(attention)}
-        shimmer={Boolean(attention) && !isTerminal}
-        animatedBorder={Boolean(attention) && !isTerminal}
+        pulse={Boolean(attention) && attentionActive}
+        shimmer={Boolean(attention) && attentionActive && !isTerminal}
+        animatedBorder={Boolean(attention) && attentionActive && !isTerminal}
         radius={isTerminal ? 0 : theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
         nerv={theme.skin === "evangelion"}
         rail={theme.skin === "starwars"}
@@ -1404,10 +1487,10 @@ export function CompactSessionCard({
               currentTool={session.currentTool}
               theme={theme}
               size={48}
-              animated
+              animated={avatarAnimated}
             />
             <View style={styles.compactCardBody}>
-              <Text style={styles.compactPhase}>{session.phase}</Text>
+              <Text style={styles.compactPhase}>{phaseLabel(session.phase)}</Text>
               {activity ? (
                 <Text style={styles.compactMeta} numberOfLines={1}>
                   {activity}
@@ -1427,12 +1510,14 @@ export function NeedsAttentionCard({
   theme,
   styles,
   onFieldFocus,
+  attentionActive = true,
 }: {
   request: PendingRequest
   resolve: Resolve
   theme: Theme
   styles: Styles
   onFieldFocus?: (y: number, h: number) => void
+  attentionActive?: boolean
 }) {
   const isQuestion = request.kind === "question"
   const border = isQuestion ? theme.questionBorder : theme.permissionBorder
@@ -1441,7 +1526,7 @@ export function NeedsAttentionCard({
   const text = isQuestion ? theme.questionText : theme.permissionText
   const isTerminal = theme.skin === "terminal"
   return (
-    <GradientSurface colors={border} glow={glow} pulse shimmer={!isTerminal} animatedBorder={!isTerminal} radius={isTerminal ? 0 : theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18} nerv={theme.skin === "evangelion"} rail={theme.skin === "starwars"} innerStyle={{ backgroundColor: theme.surface }}>
+    <GradientSurface colors={border} glow={glow} pulse={attentionActive} shimmer={attentionActive && !isTerminal} animatedBorder={attentionActive && !isTerminal} radius={isTerminal ? 0 : theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18} nerv={theme.skin === "evangelion"} rail={theme.skin === "starwars"} innerStyle={{ backgroundColor: theme.surface }}>
       <View style={styles.cardPad}>
         <View style={[styles.inlineGlow, { marginTop: 0, shadowColor: glow }]}>
           <LinearGradient colors={bgGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inlineGradient}>
@@ -1462,11 +1547,12 @@ export function NeedsAttentionCard({
 
 export function PreviewScreen({ onClose, theme, styles, resolve }: { onClose: () => void; theme: Theme; styles: Styles; resolve: Resolve }) {
   const noop: Resolve = () => {}
+  const insets = useSafeAreaInsets()
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
         <ScreenBackdrop theme={theme} />
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>Card preview</Text>
             <PressableScale onPress={onClose} accessibilityLabel="Done">
@@ -1572,13 +1658,13 @@ export function PreviewScreen({ onClose, theme, styles, resolve }: { onClose: ()
           <GradientButton label="Primary action" onPress={() => {}} styles={styles} colors={theme.accentGradient} />
           <View style={styles.actions}>
             <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
-              <Text style={styles.actionText}>Allow</Text>
+              <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.allow)) }]}>Allow</Text>
             </View>
             <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.deny) }]}>
-              <Text style={styles.actionText}>Deny</Text>
+              <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.deny)) }]}>Deny</Text>
             </View>
             <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.option) }]}>
-              <Text style={styles.actionText}>Option</Text>
+              <Text style={[styles.actionText, { color: actionLabel(theme, actionFill(theme, theme.option)) }]}>Option</Text>
             </View>
           </View>
           <View style={styles.badges}>

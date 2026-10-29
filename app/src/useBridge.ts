@@ -86,6 +86,7 @@ export function useBridge() {
   const tokenRef = useRef<string | null>(null)
   const startedRef = useRef(false)
   const lastRefreshRef = useRef(0)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(0)
   const connectingRef = useRef(false)
   const lastDoorbellSig = useRef("")
   const lastDoorbellAt = useRef(0)
@@ -138,7 +139,7 @@ export function useBridge() {
       setPaired(true)
       dispatch({ type: "connected" })
       pairingRequiredRef.current = false
-      lastRefreshRef.current = Date.now()
+      markUpdated()
       liveActivity.setStale(false)
       liveActivity.setDisconnected(false)
       return snapshot
@@ -150,13 +151,19 @@ export function useBridge() {
     }
   }, [])
 
+  const markUpdated = useCallback(() => {
+    const now = Date.now()
+    lastRefreshRef.current = now
+    setLastUpdatedAt(now)
+  }, [])
+
   const refresh = useCallback(async () => {
     await syncState()
   }, [syncState])
 
   const handleEvent = useCallback((event: ActivityEvent) => {
     devLog("event", event.type)
-    lastRefreshRef.current = Date.now()
+    markUpdated()
     // Receiving streamed events means the bridge is reachable; reconcile once so a
     // missed reconnect transition cannot leave the unpaired block or an old error.
     if (!reconciledRef.current) {
@@ -271,7 +278,7 @@ export function useBridge() {
       setAppState(stateFromSnapshot(snapshot))
       setPaired(true)
       await rememberAddress(base)
-      lastRefreshRef.current = Date.now()
+      markUpdated()
       liveActivity.setStale(false)
       liveActivity.setDisconnected(false)
       if (disconnectedTimerRef.current) {
@@ -778,6 +785,7 @@ export function useBridge() {
     baseRef.current = null
     tokenRef.current = null
     lastRefreshRef.current = 0
+    setLastUpdatedAt(0)
     fetchBusyRef.current = false
     reconciledRef.current = false
     setPaired(false)
@@ -1061,5 +1069,5 @@ export function useBridge() {
     }
   }, [connect, connectManual, connectRemembered, resolve, refresh])
 
-  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, skin, themeOption, setSkin, setSkinAndOption, setThemeOption, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic }
+  return { appState, connection, paired, connect, connectManual, disconnect, resolve, sendPrompt, startSession, stopSession, closeSession, switchSession, loadOptions, liveActivityEnabled, setLiveActivityOn, deviceName, skin, themeOption, setSkin, setSkinAndOption, setThemeOption, pairingCodeRequest, pairingCodeError, submitPairingCode, cancelPairingCode, diagnostic, lastUpdatedAt, refresh }
 }

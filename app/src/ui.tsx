@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { AccessibilityInfo, Animated, Dimensions, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native"
+import { AccessibilityInfo, Animated, Dimensions, Easing, Pressable, StyleSheet, Text, View, type AccessibilityState, type StyleProp, type ViewStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
 import { MONO_FONT } from "./terminalArt"
+import { AMBIENT, DURATION, EASE } from "./motion"
 
 /** Respect the system reduced-motion setting. */
 export function useReducedMotion(): boolean {
@@ -32,7 +33,7 @@ export function FadeIn({ children, delay = 0, style }: { children: ReactNode; de
     }
     const animation = Animated.timing(progress, {
       toValue: 1,
-      duration: 260,
+      duration: DURATION.base,
       delay,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
@@ -56,7 +57,7 @@ export function FadeIn({ children, delay = 0, style }: { children: ReactNode; de
   )
 }
 
-/** Instant press-down feedback with a gentle spring release. */
+/** Instant press-down feedback (120ms) with an equally quick release. */
 export function PressableScale({
   onPress,
   onLongPress,
@@ -64,6 +65,9 @@ export function PressableScale({
   style,
   children,
   accessibilityLabel,
+  accessibilityHint,
+  accessibilityState,
+  hitSlop,
 }: {
   onPress?: () => void
   onLongPress?: () => void
@@ -71,6 +75,9 @@ export function PressableScale({
   style?: StyleProp<ViewStyle>
   children: ReactNode
   accessibilityLabel?: string
+  accessibilityHint?: string
+  accessibilityState?: AccessibilityState
+  hitSlop?: number | { top?: number; bottom?: number; left?: number; right?: number }
 }) {
   const scale = useRef(new Animated.Value(1)).current
   return (
@@ -78,14 +85,17 @@ export function PressableScale({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={accessibilityState}
+        hitSlop={hitSlop}
         disabled={disabled}
         onPress={onPress}
         onLongPress={onLongPress}
         onPressIn={() =>
-          Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 0 }).start()
+          Animated.timing(scale, { toValue: 0.97, duration: DURATION.press, easing: EASE.out, useNativeDriver: true }).start()
         }
         onPressOut={() =>
-          Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start()
+          Animated.timing(scale, { toValue: 1, duration: DURATION.press, easing: EASE.out, useNativeDriver: true }).start()
         }
       >
         {children}
@@ -127,25 +137,9 @@ export function GradientSurface({
   children: ReactNode
 }) {
   const reduce = useReducedMotion()
-  const glowOpacity = useRef(new Animated.Value(glow ? 0.15 : 0)).current
   const shimmerX = useRef(new Animated.Value(0)).current
   const spin = useRef(new Animated.Value(0)).current
   const shimmerDistance = Dimensions.get("window").width + 280
-
-  useEffect(() => {
-    if (!pulse || !glow || reduce) {
-      glowOpacity.setValue(glow ? 0.15 : 0)
-      return
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowOpacity, { toValue: 0.22, duration: 2400, useNativeDriver: false }),
-        Animated.timing(glowOpacity, { toValue: 0.06, duration: 2400, useNativeDriver: false }),
-      ]),
-    )
-    loop.start()
-    return () => loop.stop()
-  }, [pulse, glow, reduce, glowOpacity])
 
   // The sheen sweeps across once on appear, or loops when shimmerLoop is set.
   useEffect(() => {
@@ -155,7 +149,7 @@ export function GradientSurface({
       ? Animated.loop(
           Animated.timing(shimmerX, {
             toValue: 1,
-            duration: 2800,
+            duration: AMBIENT.sheen,
             delay: 900,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
@@ -163,7 +157,7 @@ export function GradientSurface({
         )
       : Animated.timing(shimmerX, {
           toValue: 1,
-          duration: 1100,
+          duration: AMBIENT.sheenOnce,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         })
@@ -176,7 +170,7 @@ export function GradientSurface({
     if (!animatedBorder || reduce) return
     spin.setValue(0)
     const loop = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration: 6000, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(spin, { toValue: 1, duration: AMBIENT.border, easing: Easing.linear, useNativeDriver: true }),
     )
     loop.start()
     return () => loop.stop()
@@ -187,7 +181,7 @@ export function GradientSurface({
         shadowColor: glow,
         shadowOffset: { width: 0, height: 0 },
         shadowRadius: 30,
-        shadowOpacity: pulse && !reduce ? glowOpacity : 0.15,
+        shadowOpacity: 0.15,
         elevation: 10,
       }
     : null
@@ -270,160 +264,16 @@ export function GradientSurface({
   )
 }
 
-/** A round multi-color gradient button with a sweeping sheen and a breathing glow. */
-export function GradientGlowButton({
-  children,
-  colors,
-  onPress,
-  accessibilityLabel,
-  size = 44,
-}: {
-  children: ReactNode
-  colors: readonly [string, string, ...string[]]
-  onPress: () => void
-  accessibilityLabel?: string
-  size?: number
-}) {
-  const reduce = useReducedMotion()
-  const sheen = useRef(new Animated.Value(0)).current
-  const glow = useRef(new Animated.Value(0.45)).current
-
-  useEffect(() => {
-    if (reduce) {
-      sheen.setValue(0.5)
-      glow.setValue(0.45)
-      return
-    }
-    const sweep = Animated.loop(
-      Animated.timing(sheen, {
-        toValue: 1,
-        duration: 2200,
-        delay: 600,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: true,
-      }),
-    )
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glow, { toValue: 0.85, duration: 1500, useNativeDriver: false }),
-        Animated.timing(glow, { toValue: 0.35, duration: 1500, useNativeDriver: false }),
-      ]),
-    )
-    sweep.start()
-    pulse.start()
-    return () => {
-      sweep.stop()
-      pulse.stop()
-    }
-  }, [reduce, sheen, glow])
-
-  return (
-    <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
-      <Animated.View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          shadowColor: colors[0],
-          shadowOffset: { width: 0, height: 0 },
-          shadowRadius: 14,
-          shadowOpacity: glow,
-          elevation: 10,
-        }}
-      >
-        <View style={{ flex: 1, borderRadius: size / 2, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
-          <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-          <Animated.View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: -6,
-              bottom: -6,
-              width: 34,
-              transform: [
-                { translateX: sheen.interpolate({ inputRange: [0, 1], outputRange: [-60, size + 40] }) },
-                { rotate: "20deg" },
-              ],
-            }}
-          >
-            <LinearGradient
-              colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.75)", "rgba(255,255,255,0)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={{ flex: 1 }}
-            />
-          </Animated.View>
-          {children}
-        </View>
-      </Animated.View>
-    </PressableScale>
-  )
-}
-
-/** A round button with a breathing colored halo; static under reduced motion. */
-export function GlowIconButton({
-  label,
-  color,
-  onPress,
-  accessibilityLabel,
-  size = 38,
-}: {
-  label: string
-  color: string
-  onPress: () => void
-  accessibilityLabel?: string
-  size?: number
-}) {
-  const reduce = useReducedMotion()
-  const glow = useRef(new Animated.Value(0.25)).current
-  useEffect(() => {
-    if (reduce) {
-      glow.setValue(0.3)
-      return
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glow, { toValue: 0.7, duration: 1400, useNativeDriver: false }),
-        Animated.timing(glow, { toValue: 0.2, duration: 1400, useNativeDriver: false }),
-      ]),
-    )
-    loop.start()
-    return () => loop.stop()
-  }, [reduce, glow])
-
-  return (
-    <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
-      <Animated.View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          alignItems: "center",
-          justifyContent: "center",
-          borderWidth: 1.5,
-          borderColor: color,
-          shadowColor: color,
-          shadowOffset: { width: 0, height: 0 },
-          shadowRadius: 12,
-          shadowOpacity: glow,
-          elevation: 8,
-        }}
-      >
-        <Text style={{ color, fontSize: size * 0.62, fontWeight: "700", lineHeight: size * 0.68 }}>{label}</Text>
-      </Animated.View>
-    </PressableScale>
-  )
-}
-
 /** A small dot that breathes; static under reduced motion. `glyph` draws it as a monospace mark (Terminal skin). */
-export function GlowDot({ color, size = 10, pulse = false, glyph = false }: { color: string; size?: number; pulse?: boolean; glyph?: boolean }) {  const reduce = useReducedMotion()
+export function GlowDot({ color, size = 10, pulse = false, glyph = false }: { color: string; size?: number; pulse?: boolean; glyph?: boolean }) {
+  const reduce = useReducedMotion()
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
     if (!pulse || reduce) return
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.35, duration: 900, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.35, duration: AMBIENT.pulse, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: AMBIENT.pulse, useNativeDriver: true }),
       ]),
     )
     loop.start()
