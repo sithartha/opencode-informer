@@ -9,6 +9,7 @@ import { dirName } from "./paths"
 import { formatCost } from "./format"
 import { FadeIn, GlowDot, GradientSurface, HazardBar, PressableScale, Scanlines, TelemetryBars } from "./ui"
 import { ThemeMark } from "./themeMark"
+import { AgentAvatar } from "./AgentAvatar"
 import type { Styles } from "./styles"
 
 export const PHASE_COLORS: Record<string, string> = {
@@ -1117,6 +1118,7 @@ export function SessionCard({
   onStop,
   onClose,
   onOpenSwitcher,
+  onCollapse,
 }: {
   session: Session
   requests: PendingRequest[]
@@ -1128,6 +1130,7 @@ export function SessionCard({
   onStop?: (sessionID: string) => void
   onClose?: (sessionID: string) => void
   onOpenSwitcher?: (session: Session) => void
+  onCollapse?: () => void
 }) {
   const request = requests[0]
   const isQuestion = request?.kind === "question"
@@ -1150,10 +1153,27 @@ export function SessionCard({
     >
       {isClassicOS ? (
         <LinearGradient colors={theme.accentGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.osWindowBar}>
+          <AgentAvatar
+            agent={session.agent}
+            sessionId={session.id}
+            phase={session.phase}
+            currentTool={session.currentTool}
+            theme={theme}
+            size={22}
+            animated
+          />
           <GlowDot color="#ffffff" size={8} pulse={session.phase === "running"} />
-          <Text style={styles.osWindowTitle} numberOfLines={1}>
-            {session.title || dirName(session.cwd) || session.id}
-          </Text>
+          {onCollapse ? (
+            <PressableScale onPress={onCollapse} style={styles.titleGrow} accessibilityLabel="Collapse session">
+              <Text style={styles.osWindowTitle} numberOfLines={1}>
+                {session.title || dirName(session.cwd) || session.id}
+              </Text>
+            </PressableScale>
+          ) : (
+            <Text style={styles.osWindowTitle} numberOfLines={1}>
+              {session.title || dirName(session.cwd) || session.id}
+            </Text>
+          )}
           <Text style={styles.osWindowPhase}>{session.phase}</Text>
           {(session.phase === "running" || session.phase === "waiting-permission" || session.phase === "waiting-answer") && onStop ? (
             <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
@@ -1182,10 +1202,27 @@ export function SessionCard({
       <View style={styles.cardPad}>
         {isClassicOS ? null : (
           <View style={styles.sessionHeader}>
+            <AgentAvatar
+              agent={session.agent}
+              sessionId={session.id}
+              phase={session.phase}
+              currentTool={session.currentTool}
+              theme={theme}
+              size={40}
+              animated
+            />
             <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={9} pulse={session.phase === "running"} />
-            <Text style={styles.sessionTitle} numberOfLines={1}>
-              {session.title || dirName(session.cwd) || session.id}
-            </Text>
+            {onCollapse ? (
+              <PressableScale onPress={onCollapse} style={styles.titleGrow} accessibilityLabel="Collapse session">
+                <Text style={styles.sessionTitle} numberOfLines={1}>
+                  {session.title || dirName(session.cwd) || session.id}
+                </Text>
+              </PressableScale>
+            ) : (
+              <Text style={styles.sessionTitle} numberOfLines={1}>
+                {session.title || dirName(session.cwd) || session.id}
+              </Text>
+            )}
             {(session.phase === "running" || session.phase === "waiting-permission" || session.phase === "waiting-answer") && onStop ? (
               <PressableScale onPress={() => onStop(session.id)} accessibilityLabel="Stop">
                 <View style={styles.stopButton}>
@@ -1242,6 +1279,121 @@ export function SessionCard({
   )
 }
 
+/** Column gap used by the compact session grid; keep in sync with styles.sessionGrid. */
+export const SESSION_GRID_GAP = 12
+
+/**
+ * Lays sessions out in two columns and hands each item the measured width, so
+ * percentage-plus-gap rounding cannot disagree with the visible columns.
+ */
+export function SessionGrid({ styles, children }: { styles: Styles; children: (itemWidth: number | undefined) => ReactNode }) {
+  const [width, setWidth] = useState(0)
+  const itemWidth = width > 0 ? (width - SESSION_GRID_GAP) / 2 : undefined
+  return (
+    <View testID="session-grid" style={styles.sessionGrid} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      {children(itemWidth)}
+    </View>
+  )
+}
+
+export function SessionsLayoutToggle({
+  layout,
+  onChange,
+  styles,
+}: {
+  layout: "compact" | "full"
+  onChange: (layout: "compact" | "full") => void
+  styles: Styles
+}) {
+  return (
+    <View style={styles.layoutToggle}>
+      {(["compact", "full"] as const).map((value) => {
+        const active = layout === value
+        return (
+          <TouchableOpacity
+            key={value}
+            onPress={() => onChange(value)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={value === "compact" ? "Compact grid" : "Full list"}
+            accessibilityState={{ selected: active }}
+          >
+            <View style={[styles.layoutToggleItem, active ? styles.layoutToggleItemActive : null]}>
+              <Text style={[styles.layoutToggleText, active ? styles.layoutToggleTextActive : null]}>
+                {value === "compact" ? "Grid" : "List"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )
+      })}
+    </View>
+  )
+}
+
+/** A small session card for the two-column grid: avatar, name, phase and one line. */
+export function CompactSessionCard({
+  session,
+  request,
+  theme,
+  styles,
+  onOpen,
+}: {
+  session: Session
+  request?: PendingRequest
+  theme: Theme
+  styles: Styles
+  onOpen: () => void
+}) {
+  // The compact card is a directory-first overview: the working directory is what
+  // tells sessions apart in the grid, so it replaces the session title.
+  const name = dirName(session.cwd) || session.title || session.id
+  const activity = session.currentTool ? `tool · ${session.currentTool}` : session.lastActivity
+  const attention = request?.kind === "question" ? "question" : request ? "permission" : null
+  const colors = attention === "question" ? theme.questionBorder : attention === "permission" ? theme.permissionBorder : theme.cardBorder
+  const glow = attention === "question" ? theme.questionGlow : attention === "permission" ? theme.permissionGlow : undefined
+  return (
+    <PressableScale onPress={onOpen} accessibilityLabel={`${name}, ${session.phase}`} style={styles.titleGrow}>
+      <GradientSurface
+        colors={colors}
+        glow={glow}
+        pulse={Boolean(attention)}
+        shimmer={Boolean(attention)}
+        animatedBorder={Boolean(attention)}
+        radius={theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
+        nerv={theme.skin === "evangelion"}
+        rail={theme.skin === "starwars"}
+        style={styles.titleGrow}
+        innerStyle={{ backgroundColor: theme.surface, flex: 1 }}
+      >
+        <View style={styles.compactCard}>
+          <View style={styles.compactHeaderRow}>
+            <AgentAvatar
+              agent={session.agent}
+              sessionId={session.id}
+              phase={session.phase}
+              currentTool={session.currentTool}
+              theme={theme}
+              size={28}
+            />
+            <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={8} pulse={session.phase === "running"} />
+          </View>
+          <Text style={styles.compactTitle} numberOfLines={2}>
+            {name}
+          </Text>
+          <View style={styles.compactPhaseRow}>
+            <Text style={styles.compactPhase}>{session.phase}</Text>
+          </View>
+          {activity ? (
+            <Text style={styles.compactMeta} numberOfLines={1}>
+              {activity}
+            </Text>
+          ) : null}
+        </View>
+      </GradientSurface>
+    </PressableScale>
+  )
+}
+
 export function NeedsAttentionCard({
   request,
   resolve,
@@ -1290,6 +1442,20 @@ export function PreviewScreen({ onClose, theme, styles, resolve }: { onClose: ()
             </PressableScale>
           </View>
           <Text style={styles.hint}>Every card state, with sample data.</Text>
+
+          <Text style={styles.section}>Sessions · compact grid</Text>
+          <SessionGrid styles={styles}>
+            {(itemWidth) => (
+              <View style={{ width: itemWidth ?? "48%" }}>
+                <CompactSessionCard
+                  session={{ id: "s-grid", agent: "opencode", cwd: "/Users/dev/api", phase: "running", currentTool: "Bash", lastActivity: "Running the test suite", updatedAt: 0 }}
+                  theme={theme}
+                  styles={styles}
+                  onOpen={() => {}}
+                />
+              </View>
+            )}
+          </SessionGrid>
 
           <Text style={styles.section}>Hero · idle</Text>
           <FadeIn>

@@ -4,12 +4,13 @@ import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, 
 import { LinearGradient } from "expo-linear-gradient"
 import { useBridge } from "./src/useBridge"
 import { orderSessions, type PendingRequest, type Session } from "./src/events"
+import { sessionPresentation, toggleExpanded, type SessionLayout } from "./src/layout"
 import { aggregate } from "./src/aggregate"
 import { resolveTheme, SKINS, skinDef, themeSelection, type SkinId } from "./src/theme"
 import { createStyles } from "./src/styles"
 import { liveActivity } from "./src/liveActivity"
 import { joinHostPort } from "./src/manualConnect"
-import { CompactHero, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SwitcherModal } from "./src/components"
+import { CompactHero, CompactSessionCard, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SessionGrid, SessionsLayoutToggle, SwitcherModal } from "./src/components"
 import { ThemeMark } from "./src/themeMark"
 import { DemoScreen } from "./src/DemoScreen"
 import { Ionicons } from "@expo/vector-icons"
@@ -72,6 +73,8 @@ export default function App() {
   }, [theme])
 
   const [showManual, setShowManual] = useState(false)
+  const [sessionLayout, setSessionLayout] = useState<SessionLayout>("compact")
+  const [expandedSessionID, setExpandedSessionID] = useState<string | null>(null)
   const [manualError, setManualError] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -180,6 +183,22 @@ export default function App() {
   const orphanPending = pending.filter((request) => !appState.sessions[request.sessionID]).reverse()
   const firstWaitingSessionID = sessions.find((session) => (pendingBySession[session.id] ?? []).length > 0)?.id
 
+  const sessionCard = (session: Session, onCollapse?: () => void) => (
+    <SessionCard
+      session={session}
+      requests={pendingBySession[session.id] ?? []}
+      resolve={resolve}
+      theme={theme}
+      styles={styles}
+      onFieldFocus={focusField}
+      onSendPrompt={sendPrompt}
+      onStop={(sessionID) => setConfirmAction({ kind: "stop", sessionID })}
+      onClose={(sessionID) => setConfirmAction({ kind: "close", sessionID })}
+      onOpenSwitcher={(value) => void openSwitcher(value)}
+      onCollapse={onCollapse}
+    />
+  )
+
   const statusColor =
     connection.status === "connected" ? theme.allow : connection.status === "disconnected" ? theme.deny : theme.accent
 
@@ -252,8 +271,12 @@ export default function App() {
 
         {!paired ? (
           <View style={styles.connectBlock}>
-            <GradientButton label="Connect to Mac" onPress={() => void connect()} styles={styles} colors={theme.accentGradient} />
-            <Text style={styles.hint}>or connect by address (no Bluetooth)</Text>
+            <GradientButton label="Find nearby computer" onPress={() => void connect(true)} styles={styles} colors={theme.accentGradient} />
+            <Text style={styles.hint}>
+              {connection.status === "discovering" || connection.status === "connecting"
+                ? "Searching for the computer over Bluetooth…"
+                : "or connect by address (no Bluetooth)"}
+            </Text>
             <GradientButton
               label="Connect by address"
               onPress={() => {
@@ -279,13 +302,10 @@ export default function App() {
           </>
         ) : null}
 
-        {theme.skin === "classic-os" ? (
-          <View style={styles.sessionsPill}>
-            <Text style={styles.sessionsPillText}>Sessions</Text>
-          </View>
-        ) : (
-          <Text style={styles.section}>Sessions</Text>
-        )}
+        <View style={styles.sessionsHeaderRow}>
+          <Text style={[styles.section, styles.sessionsHeadingInRow]}>Sessions</Text>
+          <SessionsLayoutToggle layout={sessionLayout} onChange={setSessionLayout} styles={styles} />
+        </View>
         {sessions.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.empty}>No active sessions</Text>
@@ -293,24 +313,46 @@ export default function App() {
             <GradientButton label="Try demo" onPress={() => setShowDemo(true)} styles={styles} colors={theme.accentGradient} />
           </View>
         ) : null}
-        {sessions.map((session, index) => (
-          <View key={session.id} onLayout={orphanPending.length === 0 && session.id === firstWaitingSessionID ? markWaiting : undefined}>
-            <FadeIn delay={index * 50} style={styles.cardGap}>
-              <SessionCard
-                session={session}
-                requests={pendingBySession[session.id] ?? []}
-                resolve={resolve}
-                theme={theme}
-                styles={styles}
-                onFieldFocus={focusField}
-                onSendPrompt={sendPrompt}
-                onStop={(sessionID) => setConfirmAction({ kind: "stop", sessionID })}
-                onClose={(sessionID) => setConfirmAction({ kind: "close", sessionID })}
-                onOpenSwitcher={(value) => void openSwitcher(value)}
-              />
-            </FadeIn>
-          </View>
-        ))}
+        {sessionLayout === "full"
+          ? sessions.map((session, index) => (
+              <View key={session.id} onLayout={orphanPending.length === 0 && session.id === firstWaitingSessionID ? markWaiting : undefined}>
+                <FadeIn delay={index * 50} style={styles.cardGap}>
+                  {sessionCard(session)}
+                </FadeIn>
+              </View>
+            ))
+          : (
+              <SessionGrid styles={styles}>
+                {(itemWidth) =>
+                  sessions.map((session, index) => {
+                    const requests = pendingBySession[session.id] ?? []
+                    const pending = requests.length > 0
+                    const expanded = sessionPresentation({ layout: sessionLayout, expandedSessionID, sessionID: session.id }) === "full"
+                    return (
+                      <View
+                        key={session.id}
+                        style={{ width: expanded ? "100%" : itemWidth ?? "48%" }}
+                        onLayout={orphanPending.length === 0 && session.id === firstWaitingSessionID ? markWaiting : undefined}
+                      >
+                        <FadeIn delay={index * 50} style={styles.titleGrow}>
+                          {expanded ? (
+                            sessionCard(session, () => setExpandedSessionID(null))
+                          ) : (
+                            <CompactSessionCard
+                              session={session}
+                              request={requests[0]}
+                              theme={theme}
+                              styles={styles}
+                              onOpen={() => setExpandedSessionID(toggleExpanded(expandedSessionID, session.id))}
+                            />
+                          )}
+                        </FadeIn>
+                      </View>
+                    )
+                  })
+                }
+              </SessionGrid>
+            )}
         {keyboardHeight > 0 ? <View style={{ height: keyboardHeight + 24 }} /> : null}
       </ScrollView>
       </KeyboardAvoidingView>

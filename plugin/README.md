@@ -23,6 +23,12 @@ loads the plugin per location/instance.
 
 All endpoints except `/pair` require `Authorization: Bearer <token>`.
 
+Issued tokens are persisted at `$XDG_STATE_HOME/open-island/pairing.json` (default
+`~/.local/state/open-island/pairing.json`, owner-only permissions) so a restarted
+plugin or OpenCode keeps already-paired phones paired. Override the path with
+`OPEN_ISLAND_MOBILE_PAIRING_FILE`; the bridge keeps working in memory if the file
+cannot be read or written.
+
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | `POST` | `/pair` | no | `{deviceName}` → `202 {approvalID, status:"pending"}`; with `{approvalID}` once approved → `200 {status:"approved", token}` |

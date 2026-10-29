@@ -1,6 +1,9 @@
 import { randomUUID, randomBytes, randomInt } from "node:crypto"
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
+import { dirname } from "node:path"
 
 const MAX_APPROVALS = 1000
+const MAX_TOKENS = 50
 const CODE_LENGTH = 6
 
 function makeCode() {
@@ -10,13 +13,57 @@ function makeCode() {
 
 // Pairing is out-of-band: the client asks to pair, the Mac user approves in the
 // helper, and only then does the bridge issue a bearer token. Tokens are
-// independent of Open Island's own pairing token.
+// independent of Open Island's own pairing token and are persisted on disk (when a
+// store path is supplied) so a restarted bridge does not force already-paired
+// phones to pair again.
 export class PairingManager {
-  constructor({ onApprovalRequested } = {}) {
+  constructor({ onApprovalRequested, storePath = null } = {}) {
     this.approvals = new Map()
     this.tokens = new Map()
     this.onApprovalRequested = onApprovalRequested
+    this.storePath = storePath
     this.code = makeCode()
+    this.loadTokens()
+  }
+
+  /** Load persisted tokens; a missing or corrupt store simply starts empty. */
+  loadTokens() {
+    if (!this.storePath) return
+    try {
+      const data = JSON.parse(readFileSync(this.storePath, "utf8"))
+      const entries = Array.isArray(data && data.tokens) ? data.tokens : []
+      for (const entry of entries) {
+        if (!entry || typeof entry.token !== "string" || !entry.token) continue
+        this.tokens.set(entry.token, {
+          deviceName: typeof entry.deviceName === "string" ? entry.deviceName : "unknown",
+          createdAt: typeof entry.createdAt === "number" ? entry.createdAt : Date.now(),
+        })
+      }
+    } catch {
+      // Missing, unreadable or malformed: keep serving with in-memory tokens.
+    }
+  }
+
+  /** Write the token list atomically with owner-only permissions; best effort. */
+  persistTokens() {
+    if (!this.storePath) return
+    try {
+      mkdirSync(dirname(this.storePath), { recursive: true, mode: 0o700 })
+      const payload = JSON.stringify({
+        version: 1,
+        tokens: [...this.tokens.entries()].map(([token, meta]) => ({
+          token,
+          deviceName: meta.deviceName,
+          createdAt: meta.createdAt,
+        })),
+      })
+      const temporary = `${this.storePath}.tmp`
+      writeFileSync(temporary, payload, { mode: 0o600 })
+      renameSync(temporary, this.storePath)
+      chmodSync(this.storePath, 0o600)
+    } catch {
+      // A read-only or full disk must not stop the bridge.
+    }
   }
 
   /** The current pairing code, shown on the Mac by the helper. */
@@ -101,6 +148,12 @@ export class PairingManager {
   issueToken(deviceName) {
     const token = randomBytes(24).toString("base64url")
     this.tokens.set(token, { deviceName: deviceName || "unknown", createdAt: Date.now() })
+    // Oldest first, so a long-lived install does not accumulate tokens forever.
+    while (this.tokens.size > MAX_TOKENS) {
+      const oldest = this.tokens.keys().next().value
+      this.tokens.delete(oldest)
+    }
+    this.persistTokens()
     return token
   }
 
@@ -109,7 +162,8 @@ export class PairingManager {
   }
 
   revoke(token) {
-    this.tokens.delete(token)
+    if (!this.tokens.delete(token)) return
+    this.persistTokens()
   }
 
   pruneApprovals() {

@@ -4,7 +4,7 @@ import { ResolutionCoordinator } from "./resolution.js"
 import { createBridgeServer } from "./server.js"
 import { createDoorbell } from "./doorbell.js"
 import { configFromEnv } from "./contract.js"
-import { buildFormAnswer, replyToForm, replyToPermission } from "./serviceReply.js"
+import { buildFormAnswer, readService, replyToForm, replyToPermission } from "./serviceReply.js"
 import { superviseEventStream } from "./eventStream.js"
 import { appendFileSync } from "node:fs"
 
@@ -35,12 +35,38 @@ function debug(message) {
   }
 }
 
+/** Read the local OpenCode session list over its loopback service. */
+async function fetchServiceJSON(path) {
+  const service = readService()
+  if (!service) return null
+  try {
+    const response = await fetch(`${service.url.replace(/\/$/, "")}${path}`, {
+      headers: { Authorization: "Basic " + Buffer.from(`opencode:${service.password}`).toString("base64") },
+    })
+    if (!response.ok) return null
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+async function defaultListSessions() {
+  const body = await fetchServiceJSON("/api/session")
+  if (Array.isArray(body)) return body
+  if (body && Array.isArray(body.data)) return body.data
+  return []
+}
+
+const HYDRATE_WINDOW_MS = 60 * 60 * 1000
+const HYDRATE_LIMIT = 20
+
 /** Build the bridge without an OpenCode context. Used by tests and by setup(). */
 export function buildBridge(options = {}) {
   const config = { ...configFromEnv(options.env || process.env), ...(options.config || {}) }
   const model = new ActivityModel()
   const doorbell = options.doorbell || createDoorbell(config.helperUrl)
   const pairing = new PairingManager({
+    storePath: config.pairingStorePath,
     onApprovalRequested: (approval) => {
       // Include the code so the helper can show it to the Mac user. The helper must
       // strip it before relaying to a phone.
@@ -118,6 +144,47 @@ export function buildBridge(options = {}) {
     switchSession,
   })
 
+  const listSessions = options.listSessions || defaultListSessions
+  /**
+   * Seed the model with sessions that were already open before this plugin loaded.
+   * Runs before the HTTP server starts so the first snapshot the phone fetches is
+   * complete; events apply silently (no doorbells or notifications for old work).
+   * Only sessions active in the last hour are adopted, capped, so months of history
+   * do not flood the dashboard.
+   */
+  const hydrate = async () => {
+    const sessions = await listSessions()
+    if (!Array.isArray(sessions) || sessions.length === 0) return 0
+    const cutoff = Date.now() - HYDRATE_WINDOW_MS
+    const recent = sessions
+      .filter((session) => session && session.id && ((session.time && session.time.updated) || 0) > cutoff)
+      .sort((a, b) => ((b.time && b.time.updated) || 0) - ((a.time && a.time.updated) || 0))
+      .slice(0, HYDRATE_LIMIT)
+    const recentIds = new Set(recent.map((session) => session.id))
+    const applyRoot = (session) => {
+      const directory = (session.location && session.location.directory) || ""
+      model.apply({ type: "session.created", data: { sessionID: session.id, location: { directory } } })
+      const existing = model.sessions.get(session.id)
+      if (!existing) return
+      existing.title = session.title || ""
+      existing.cwd = directory
+      existing.agent = session.agent || existing.agent
+      existing.model = session.model && session.model.id ? `${session.model.providerID}/${session.model.id}` : existing.model
+      if (typeof session.cost === "number") existing.cost = session.cost
+      existing.phase = session.time && session.time.idle ? "completed" : "running"
+      existing.updatedAt = (session.time && session.time.updated) || Date.now()
+    }
+    for (const session of recent) {
+      if (!session.parentID && recentIds.has(session.id)) applyRoot(session)
+    }
+    for (const session of recent) {
+      if (session.parentID && recentIds.has(session.parentID)) {
+        model.apply({ type: "session.created", data: { sessionID: session.id, parentID: session.parentID } })
+      }
+    }
+    return recent.length
+  }
+
   const getSessionInfo = options.getSessionInfo
   const INFO_TRIGGERS = new Set([
     "session.created",
@@ -191,7 +258,7 @@ export function buildBridge(options = {}) {
     return events
   }
 
-  return { config, model, pairing, resolution, server, doorbell, handleEvent }
+  return { config, model, pairing, resolution, server, doorbell, handleEvent, hydrate }
 }
 
 function makePermissionApplier(ctx) {
@@ -360,6 +427,13 @@ export async function setup(ctx, options = {}) {
     })
   const bridge = buildBridge({ ...options, applyPermission, applyQuestion, applyPrompt, startSession, stopSession, closeSession, optionsProvider, switchSession, getSessionInfo })
   dbg("setup", { port: bridge.config.port, host: bridge.config.host })
+
+  try {
+    const hydrated = await bridge.hydrate()
+    dbg("hydrate", { sessions: hydrated })
+  } catch (err) {
+    dbg("hydrate failed", { error: String(err && err.message) })
+  }
 
   try {
     await bridge.server.start()

@@ -21,7 +21,9 @@ LAN-only mode).
   - rendezvous (**read**) — the `host:port` the phone needs to reach the bridge;
   - pairing (**write**) — the phone's pairing write.
 - **Pairing approval** — surfaces a pairing request to the local user (see below).
-- **Rendezvous** — reports the primary LAN IPv4 address (`host:38963`).
+- **Rendezvous** — reports the primary LAN IPv4 address (`host:38963`). The address is
+  resolved on every read, so a host that changes networks hands a reconnecting phone
+  its current address instead of the one it had at startup.
 
 The wire values (UUIDs, ports, payloads) live in [`../contract/contract.json`](../contract/contract.json)
 and are shared with the phone app, the plugin bridge, and the macOS helper.

@@ -1,11 +1,12 @@
 import { fireEvent, render } from "@testing-library/react-native"
-import { Linking } from "react-native"
-import { BrandMark, CompactHero, ConfirmModal, GradientButton, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, SessionCard, SwitcherModal } from "../src/components"
+import { Linking, View } from "react-native"
+import { BrandMark, CompactHero, CompactSessionCard, ConfirmModal, GradientButton, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SessionGrid, SessionsLayoutToggle, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
 import { ThemeMark } from "../src/themeMark"
 import { createStyles } from "../src/styles"
 import { resolveTheme } from "../src/theme"
 import type { PendingRequest, Session } from "../src/events"
+import { avatarColor } from "../src/avatar"
 
 const lightTheme = resolveTheme("default", "light")
 const darkTheme = resolveTheme("default", "dark")
@@ -592,5 +593,152 @@ describe("theme preview shape", () => {
     expect(createStyles(resolveTheme("evangelion", "unit01")).themePreview.borderRadius).toBe(0)
     expect(createStyles(resolveTheme("default", "light")).themePreview.borderRadius).toBeGreaterThan(0)
     expect(createStyles(resolveTheme("default", "light")).themePreviewCard.borderRadius).toBeGreaterThan(0)
+  })
+})
+
+describe("agent avatars on session cards", () => {
+  async function avatarFor(overrides: Partial<Session>) {
+    const view = await render(
+      <SessionCard session={session(overrides)} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} />,
+    )
+    return view
+  }
+
+  it("shows thinking while a tool runs and working without one", async () => {
+    expect((await avatarFor({ phase: "running", currentTool: "Bash" })).getByTestId("agent-avatar:thinking", { includeHiddenElements: true })).toBeTruthy()
+    expect((await avatarFor({ phase: "running", currentTool: null })).getByTestId("agent-avatar:working", { includeHiddenElements: true })).toBeTruthy()
+  })
+
+  it("observes while the agent waits for the user", async () => {
+    expect((await avatarFor({ phase: "waiting-permission", currentTool: null })).getByTestId("agent-avatar:observing", { includeHiddenElements: true })).toBeTruthy()
+    expect((await avatarFor({ phase: "waiting-answer", currentTool: null })).getByTestId("agent-avatar:observing", { includeHiddenElements: true })).toBeTruthy()
+  })
+
+  it("settles when the session is done or ended", async () => {
+    expect((await avatarFor({ phase: "completed", currentTool: null })).getByTestId("agent-avatar:done", { includeHiddenElements: true })).toBeTruthy()
+    expect((await avatarFor({ phase: "ended", currentTool: null })).getByTestId("agent-avatar:inactive", { includeHiddenElements: true })).toBeTruthy()
+  })
+
+  it("draws every avatar as a circle", async () => {
+    const label = (await avatarFor({ id: "s1", agent: "opencode" })).getByTestId("agent-avatar:thinking", { includeHiddenElements: true }).props.accessibilityLabel as string
+    expect(label).toContain(" circle ")
+  })
+
+  it("draws the avatar in the active theme's colours", async () => {
+    const { getByTestId } = await avatarFor({ id: "s1", agent: "opencode" })
+    const label = getByTestId("agent-avatar:thinking", { includeHiddenElements: true }).props.accessibilityLabel as string
+    expect(label).toContain(avatarColor(lightTheme))
+  })
+
+  it("draws the same look under the classic OS skin", async () => {
+    const os = resolveTheme("classic-os", "blue")
+    const { getByTestId } = await render(
+      <SessionCard
+        session={session({ agent: "opencode" })}
+        requests={[]}
+        resolve={jest.fn()}
+        theme={os}
+        styles={createStyles(os)}
+      />,
+    )
+    expect(getByTestId("agent-avatar:thinking", { includeHiddenElements: true })).toBeTruthy()
+  })
+})
+
+describe("avatars in the demo and preview", () => {
+  it("shows an avatar on every demo card", async () => {
+    const { getAllByTestId } = await render(
+      <DemoScreen onClose={() => {}} onOpenGallery={() => {}} theme={lightTheme} styles={styles} />,
+    )
+    expect(getAllByTestId(/^agent-avatar:/, { includeHiddenElements: true }).length).toBeGreaterThan(0)
+  })
+
+  it("shows avatars in the card preview", async () => {
+    const { getAllByTestId } = await render(
+      <PreviewScreen onClose={() => {}} theme={lightTheme} styles={styles} resolve={jest.fn()} />,
+    )
+    expect(getAllByTestId(/^agent-avatar:/, { includeHiddenElements: true }).length).toBeGreaterThan(0)
+  })
+})
+
+describe("session layout controls", () => {
+  it("switches between the compact grid and the full list", async () => {
+    const onChange = jest.fn()
+    const { getByText } = await render(<SessionsLayoutToggle layout="compact" onChange={onChange} styles={styles} />)
+    await fireEvent.press(getByText("List"))
+    expect(onChange).toHaveBeenCalledWith("full")
+    await fireEvent.press(getByText("Grid"))
+    expect(onChange).toHaveBeenCalledWith("compact")
+  })
+
+  it("renders the toggle under the classic OS skin", async () => {
+    const os = resolveTheme("classic-os", "blue")
+    const { getByText } = await render(
+      <SessionsLayoutToggle layout="full" onChange={jest.fn()} styles={createStyles(os)} />,
+    )
+    expect(getByText("Grid")).toBeTruthy()
+    expect(getByText("List")).toBeTruthy()
+  })
+
+  it("shows the working directory, phase, activity and avatar on a compact card", async () => {
+    const onOpen = jest.fn()
+    const { getByText, queryByText, getByTestId } = await render(
+      <CompactSessionCard session={session({ title: "A named session" })} theme={lightTheme} styles={styles} onOpen={onOpen} />,
+    )
+    expect(getByText("api")).toBeTruthy()
+    expect(queryByText("A named session")).toBeNull()
+    expect(getByText("running")).toBeTruthy()
+    expect(getByText("tool · Bash")).toBeTruthy()
+    expect(getByTestId("agent-avatar:thinking", { includeHiddenElements: true })).toBeTruthy()
+    await fireEvent.press(getByText("api"))
+    expect(onOpen).toHaveBeenCalled()
+  })
+
+  it("keeps a pending session compact and highlighted through its avatar", async () => {
+    const { getByText, getByTestId } = await render(
+      <CompactSessionCard
+        session={session({ phase: "waiting-permission", currentTool: null })}
+        request={{ requestID: "p1", sessionID: "s1", kind: "permission", title: "Allow Bash" }}
+        theme={lightTheme}
+        styles={styles}
+        onOpen={jest.fn()}
+      />,
+    )
+    expect(getByText("waiting-permission")).toBeTruthy()
+    expect(getByTestId("agent-avatar:observing", { includeHiddenElements: true })).toBeTruthy()
+  })
+
+  it("gives each grid item half the measured width", async () => {
+    const widths: Array<number | undefined> = []
+    const { getByTestId } = await render(
+      <SessionGrid styles={styles}>
+        {(itemWidth) => {
+          widths.push(itemWidth)
+          return <View testID="grid-child" />
+        }}
+      </SessionGrid>,
+    )
+    await fireEvent(getByTestId("session-grid"), "layout", { nativeEvent: { layout: { width: 320, height: 200 } } })
+    expect(widths[widths.length - 1]).toBe(154)
+  })
+
+  it("collapses an expanded card from its header but only when asked", async () => {
+    const onCollapse = jest.fn()
+    const expanded = await render(
+      <SessionCard session={session()} requests={[]} resolve={jest.fn()} theme={lightTheme} styles={styles} onCollapse={onCollapse} />,
+    )
+    await fireEvent.press(expanded.getByLabelText("Collapse session"))
+    expect(onCollapse).toHaveBeenCalled()
+
+    const pending = await render(
+      <SessionCard
+        session={session({ phase: "waiting-permission", currentTool: null })}
+        requests={[{ requestID: "p1", sessionID: "s1", kind: "permission", title: "Allow Bash" }]}
+        resolve={jest.fn()}
+        theme={lightTheme}
+        styles={styles}
+      />,
+    )
+    expect(pending.queryByLabelText("Collapse session")).toBeNull()
   })
 })

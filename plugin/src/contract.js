@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs"
+import { homedir } from "node:os"
 
 let cached
+
+/** Where issued pairing tokens live so a paired phone survives a bridge restart. */
+export function defaultPairingStorePath() {
+  const stateHome = process.env.XDG_STATE_HOME || `${process.env.HOME || homedir()}/.local/state`
+  return `${stateHome}/open-island/pairing.json`
+}
 
 /** Load the shared wire contract (cached). */
 export function loadContract() {
@@ -23,5 +30,5 @@ export function configFromEnv(env = process.env) {
   const applyTimeoutMs = env.OPEN_ISLAND_MOBILE_APPLY_TIMEOUT_MS
     ? Number(env.OPEN_ISLAND_MOBILE_APPLY_TIMEOUT_MS)
     : 10000
-  return { host: contract.bridge.host, port, helperUrl, keepaliveMs, applyTimeoutMs }
+  return { host: contract.bridge.host, port, helperUrl, keepaliveMs, applyTimeoutMs, pairingStorePath: env.OPEN_ISLAND_MOBILE_PAIRING_FILE || defaultPairingStorePath() }
 }

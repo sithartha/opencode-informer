@@ -23,7 +23,9 @@ open "dist/OpenCode Informer.app"
 
 The menu-bar item ("OI") shows BLE status and the rendezvous address, and offers:
 
-- **Copy rendezvous** — copies the `host:port` the bridge listens on.
+- **Copy rendezvous** — copies the `host:port` the bridge listens on. The address is
+  resolved when the phone reads it, so after the Mac changes networks (Wi-Fi to
+  Ethernet, another Wi-Fi, or a hotspot) the next read returns the current address.
 - **Refresh phone** — asks the phone to resync every card from the Mac.
 - **Launch at Login** — toggles starting the helper automatically at login (modern
   login-item API, no manual Login Items setup).

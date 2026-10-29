@@ -18,13 +18,13 @@ test("no stored token means pairing is required", async () => {
   assert.deepEqual(result, { token: null, snapshot: null, revoked: false })
 })
 
-test("a 401 clears the token so the app re-pairs", async () => {
+test("a 401 keeps the token so a stale address cannot unpair the phone", async () => {
   const store = memoryTokenStore("revoked")
   const result = await reconnectWithToken("http://h:1", store, async () => {
     throw new Error("unauthorized")
   })
-  assert.deepEqual(result, { token: null, snapshot: null, revoked: true })
-  assert.equal(await store.get(), null)
+  assert.deepEqual(result, { token: "revoked", snapshot: null, revoked: true })
+  assert.equal(await store.get(), "revoked")
 })
 
 test("a transient error is surfaced, not swallowed", async () => {

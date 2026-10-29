@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react"
 import { AppState as RNAppState, Vibration } from "react-native"
+import NetInfo from "@react-native-community/netinfo"
 import Constants from "expo-constants"
 import * as Notifications from "expo-notifications"
 import { applyEvent, emptyState, parseOptions, stateFromSnapshot, type ActivityEvent, type AppState, type PendingRequest } from "./events"
@@ -7,9 +8,12 @@ import { connectionReducer, initialConnection } from "./connection"
 import { beginPairing, baseUrl, fetchState, pollPairing, postAnswers, postPrompt, postResolution, type AnswerMap, type ModelRef, type SessionOptions } from "./bridgeClient"
 import * as sessionActions from "./sessionActions"
 import { BleClient } from "./bleClient"
+import type { Rendezvous } from "./bleProtocol"
+import { networkIdentity, shouldRediscover, type NetworkIdentity } from "./networkChange"
+import { findBridge, ipv4Candidates } from "./lanScan"
+import { candidateFailure, friendlyConnectError, networkChangeAction, recordReconnectFailure } from "./rediscover"
 import { BridgeStream } from "./sse"
 import {
-  clearLastAddress,
   getLastHost,
   getLastPort,
   getLiveActivityEnabled,
@@ -36,6 +40,9 @@ import { createDiagnostics, describeDiagnostic, runGuarded } from "./diagnostics
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const PAIR_POLL_INTERVAL_MS = 2000
 const PAIR_POLL_ATTEMPTS = 60
+// iOS reports several network updates while Wi-Fi settles; wait before acting.
+const NETWORK_CHANGE_DEBOUNCE_MS = 1500
+const PROBE_TIMEOUT_MS = 5000
 
 // Dev-only: when set, skip BLE and connect straight to this host:port over HTTP.
 // Useful on the simulator, where BLE is unavailable.
@@ -94,6 +101,23 @@ export function useBridge() {
   const disconnectedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fetchAndStreamRef = useRef<((base: string, token: string) => Promise<void>) | null>(null)
   const scheduleReconnectRef = useRef<() => void>(() => {})
+  const rediscoverRef = useRef<() => Promise<boolean>>(async () => false)
+  const rediscoveringRef = useRef(false)
+  const pairingRequiredRef = useRef(false)
+  const connectRequestedRef = useRef(false)
+  const autoAttemptsRef = useRef(0)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const networkRef = useRef<NetworkIdentity | null>(null)
+  const lanScanRef = useRef(false)
+  const reconnectFailuresRef = useRef(0)
+  const discoveryGenerationRef = useRef(0)
+  // Latest connection facts for the long-lived network listener.
+  const statusRef = useRef(connection.status)
+  const pairedRef = useRef(paired)
+  const manuallyDisconnectedRef = useRef(manuallyDisconnected)
+  statusRef.current = connection.status
+  pairedRef.current = paired
+  manuallyDisconnectedRef.current = manuallyDisconnected
 
   // Single-flight, throttled snapshot sync so reconnects and repeated doorbells
   // cannot hammer the Mac with requests.
@@ -113,6 +137,7 @@ export function useBridge() {
       // missed reconnect transition cannot leave the unpaired block or an old error.
       setPaired(true)
       dispatch({ type: "connected" })
+      pairingRequiredRef.current = false
       lastRefreshRef.current = Date.now()
       liveActivity.setStale(false)
       liveActivity.setDisconnected(false)
@@ -229,6 +254,14 @@ export function useBridge() {
     }
   }, [guard, syncState])
 
+  // Remember where the last bridge was so the next launch can skip discovery.
+  const rememberAddress = useCallback(async (base: string) => {
+    const match = base.match(/^https?:\/\/([^:/]+):(\d+)$/)
+    if (!match) return
+    await setLastHost(match[1])
+    await setLastPort(Number(match[2]))
+  }, [])
+
   const fetchAndStream = useCallback(
     async (base: string, token: string) => {
       tokenRef.current = token
@@ -237,6 +270,7 @@ export function useBridge() {
       devLog("state", snapshot.activeSessionCount, "active")
       setAppState(stateFromSnapshot(snapshot))
       setPaired(true)
+      await rememberAddress(base)
       lastRefreshRef.current = Date.now()
       liveActivity.setStale(false)
       liveActivity.setDisconnected(false)
@@ -245,6 +279,9 @@ export function useBridge() {
         disconnectedTimerRef.current = null
       }
       reconnectDelayRef.current = 2000
+      reconnectFailuresRef.current = 0
+      autoAttemptsRef.current = 0
+      pairingRequiredRef.current = false
       streamRef.current?.stop()
       streamRef.current = new BridgeStream(base, token, handleEvent, () => {
         dispatch({ type: "disconnected" })
@@ -257,15 +294,19 @@ export function useBridge() {
         }
       })
       streamRef.current.start()
-      dispatch({ type: "connected" })
+      const host = base.match(/^https?:\/\/([^:/]+)/)?.[1]
+      dispatch({ type: "connected", ...(host ? { macName: host } : {}) })
     },
-    [handleEvent],
+    [handleEvent, rememberAddress],
   )
   fetchAndStreamRef.current = fetchAndStream
 
   // Reopen the stream (and resync) with backoff after a drop, so cards and the
-  // Live Activity recover on their own once the Mac is reachable again.
+  // Live Activity recover on their own once the Mac is reachable again. After a few
+  // failures the address itself is probably stale (the computer changed networks), so
+  // re-read it over Bluetooth before trying again.
   scheduleReconnectRef.current = () => {
+    if (pairingRequiredRef.current) return
     if (reconnectTimerRef.current) return
     reconnectTimerRef.current = setTimeout(async () => {
       reconnectTimerRef.current = null
@@ -275,40 +316,43 @@ export function useBridge() {
       try {
         await fetchAndStreamRef.current?.(base, token)
       } catch {
+        const failure = recordReconnectFailure(reconnectFailuresRef.current)
+        reconnectFailuresRef.current = failure.failures
         reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000)
+        if (failure.rediscover) {
+          const recovered = await rediscoverRef.current()
+          if (recovered) return
+        }
         scheduleReconnectRef.current()
       }
     }, reconnectDelayRef.current)
   }
 
-  // Remember where the last bridge was so the next launch can skip discovery.
-  const rememberAddress = useCallback(async (base: string) => {
-    const match = base.match(/^https?:\/\/([^:/]+):(\d+)$/)
-    if (!match) return
-    await setLastHost(match[1])
-    await setLastPort(Number(match[2]))
-  }, [])
-
-  // Reuse a stored token, or pair over HTTP with the Mac-shown code. Shared by
-  // BLE discovery, the remembered address, and manual connect.
+  // Reuse a stored token, or pair over HTTP with the computer-shown code. Shared by
+  // BLE discovery, the remembered address, and manual connect. Supplying a code
+  // skips token reuse so the user can replace a token the computer no longer takes.
   const establish = useCallback(
-    async (base: string, code?: string): Promise<"connected" | "needs-code"> => {
+    async (base: string, code?: string): Promise<"connected" | "needs-code" | "revoked"> => {
       devLog("establish", base)
       await configureNotifications()
       devLog("notifications configured")
 
-      const reused = await reconnectWithToken(base, secureTokenStore)
-      if (reused.revoked) await clearLastAddress()
-      if (reused.token) {
-        devLog("reconnected", base)
-        await fetchAndStream(base, reused.token)
-        await rememberAddress(base)
-        setPaired(true)
-        return "connected"
+      if (!code) {
+        const reused = await reconnectWithToken(base, secureTokenStore)
+        // A 401 is not proof the pairing is gone: the remembered address may now
+        // belong to another computer. Keep the token and let the caller check the
+        // address the helper points at.
+        if (reused.revoked) return "revoked"
+        if (reused.token) {
+          devLog("reconnected", base)
+          await fetchAndStream(base, reused.token)
+          await rememberAddress(base)
+          setPaired(true)
+          return "connected"
+        }
+        // A new pairing needs the code shown on the computer.
+        return "needs-code"
       }
-
-      // A new pairing needs the code shown on the Mac.
-      if (!code) return "needs-code"
 
       const first = await beginPairing(base, deviceName, code)
       if (first.status === "invalid-code") throw new Error("invalid pairing code")
@@ -336,33 +380,207 @@ export function useBridge() {
     [fetchAndStream, rememberAddress],
   )
 
-  const connect = useCallback(async (): Promise<boolean> => {
-    if (connectingRef.current) return false
+  // The computer the helper points at rejected our token. Keep the stored pairing
+  // intact, stop the automatic reconnect loop, and offer a code so the user decides
+  // whether to pair again; a new code replaces the old token.
+  const requirePairing = useCallback((base: string) => {
+    pairingRequiredRef.current = true
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
+    streamRef.current?.stop()
+    streamRef.current = null
+    // Stop the watchdog and syncs from retrying the rejected token; the token stays
+    // in SecureStore until the user pairs or disconnects.
+    baseRef.current = null
+    tokenRef.current = null
+    setPaired(false)
+    liveActivity.setDisconnected(true)
+    dispatch({ type: "failed", message: "Pairing required" })
+    setPairingCodeRequest(base)
+  }, [])
+
+  // Find the bridge by probing the phone's own /24 with the stored token. This is the
+  // fallback when Bluetooth cannot connect (for example a stale system bond) or when
+  // both machines moved networks. It never accepts a bridge that rejects the token.
+  const findBridgeOnLan = useCallback(async (): Promise<{ base: string; authorized: boolean } | null> => {
+    if (lanScanRef.current) return null
+    const network = networkRef.current
+    const token = tokenRef.current ?? (await secureTokenStore.get())
+    if (!network?.ipAddress || !token) return null
+    const hosts = ipv4Candidates(network.ipAddress, network.subnet)
+    if (hosts.length === 0) return null
+    lanScanRef.current = true
+    try {
+      const base = await findBridge(hosts, token)
+      devLog("lan scan", hosts.length, base)
+      return base
+    } catch {
+      return null
+    } finally {
+      lanScanRef.current = false
+    }
+  }, [])
+
+  // Re-read the computer's address over Bluetooth and move the connection there. Used
+  // when the phone's network changes and when reconnecting to the remembered address
+  // keeps failing. The stored token is reused; a newly discovered address is probed
+  // before the app commits to it, so a second computer in range cannot unpair the phone.
+  const rediscoverAddress = useCallback(async (): Promise<boolean> => {
+    if (pairingRequiredRef.current) return false
+    if (rediscoveringRef.current) return false
+    if (manuallyDisconnectedRef.current) return false
+    const token = tokenRef.current
+    if (!token) return false
+    const generation = discoveryGenerationRef.current
+    rediscoveringRef.current = true
+    try {
+      const ble = bleRef.current ?? new BleClient()
+      bleRef.current = ble
+      ble.onDoorbell = (payload) => void handleDoorbell(payload)
+      const rendezvous = await ble.refreshRendezvous()
+      if (generation !== discoveryGenerationRef.current) return false
+      const candidate = baseUrl(rendezvous.host, rendezvous.port)
+      if (candidate !== baseRef.current) {
+        try {
+          await fetchState(candidate, token, fetch, PROBE_TIMEOUT_MS)
+        } catch (error) {
+          const outcome = candidateFailure(error)
+          devLog("rediscover candidate rejected", outcome, candidate)
+          if (outcome === "keep-token") {
+            requirePairing(candidate)
+          } else {
+            void diagnosticsRef.current.error(error, false)
+          }
+          return false
+        }
+        if (generation !== discoveryGenerationRef.current) return false
+        await rememberAddress(candidate)
+      }
+      await fetchAndStream(candidate, token)
+      devLog("rediscovered", candidate)
+      return true
+    } catch (error) {
+      const message = (error as Error).message
+      devLog("rediscover failed", message)
+      const lan = await findBridgeOnLan()
+      if (lan) {
+        if (!lan.authorized) {
+          requirePairing(lan.base)
+          return false
+        }
+        try {
+          await fetchAndStream(lan.base, token)
+          devLog("rediscovered on lan", lan.base)
+          return true
+        } catch {
+          // fall through to the error handling below
+        }
+      }
+      if (message === "unauthorized") {
+        const base = baseRef.current
+        if (base) requirePairing(base)
+      } else {
+        void diagnosticsRef.current.error(error, false)
+      }
+      return false
+    } finally {
+      rediscoveringRef.current = false
+    }
+  }, [fetchAndStream, findBridgeOnLan, handleDoorbell, rememberAddress, requirePairing])
+  rediscoverRef.current = rediscoverAddress
+
+  // `userInitiated` skips the remembered address and scans Bluetooth immediately, so
+  // the "Find nearby computer" action does what it says instead of waiting out a dead
+  // IP. A tap during an automatic attempt cancels its scan and queues a fresh one.
+  const connect = useCallback(async (userInitiated = false): Promise<boolean> => {
+    if (connectingRef.current) {
+      if (userInitiated) {
+        connectRequestedRef.current = true
+        autoAttemptsRef.current = 0
+        bleRef.current?.abort()
+      }
+      return false
+    }
     setManuallyDisconnected(false)
+    pairingRequiredRef.current = false
+    if (userInitiated) autoAttemptsRef.current = 0
     connectingRef.current = true
+    let connected = false
     try {
       dispatch({ type: "discover" })
-      // Prefer the last bridge we reached, so a reconnect does not need Bluetooth.
-      const lastHost = await getLastHost()
-      const lastPort = await getLastPort()
-      if (lastHost && lastPort) {
-        const remembered = baseUrl(lastHost, lastPort)
-        try {
-          dispatch({ type: "pairingStarted", macName: lastHost })
-          const result = await establish(remembered)
-          if (result === "connected") return true
-          if (result === "needs-code") {
-            setPairingCodeRequest(remembered)
+      if (!userInitiated) {
+        // Prefer the last bridge we reached, so a reconnect does not need Bluetooth.
+        const lastHost = await getLastHost()
+        const lastPort = await getLastPort()
+        if (lastHost && lastPort) {
+          const remembered = baseUrl(lastHost, lastPort)
+          try {
+            dispatch({ type: "pairingStarted", macName: lastHost })
+            const result = await establish(remembered)
+            if (result === "connected") {
+              connected = true
+              return true
+            }
+            if (result === "needs-code") {
+              setPairingCodeRequest(remembered)
+              return false
+            }
+            // "revoked": the remembered address may belong to another computer now.
+            // Fall through to Bluetooth discovery before asking to pair again.
+          } catch {
+            // fall through to Bluetooth discovery
+          }
+        }
+      }
+      const storedToken = tokenRef.current ?? (await secureTokenStore.get())
+      if (userInitiated && storedToken) {
+        const lan = await findBridgeOnLan()
+        if (lan) {
+          if (!lan.authorized) {
+            requirePairing(lan.base)
             return false
           }
-        } catch {
-          // fall through to Bluetooth discovery
+          try {
+            dispatch({ type: "pairingStarted" })
+            await fetchAndStream(lan.base, storedToken)
+            connected = true
+            return true
+          } catch {
+            // fall through to Bluetooth
+          }
         }
       }
       const ble = bleRef.current ?? new BleClient()
       bleRef.current = ble
       ble.onDoorbell = (payload) => void handleDoorbell(payload)
-      const { rendezvous } = await ble.findAndConnect()
+      // Re-read the address over the Bluetooth link that may still be open (both
+      // devices moved networks together); only scan if that link cannot answer.
+      let rendezvous: Rendezvous
+      try {
+        rendezvous = await ble.refreshRendezvous()
+      } catch (bleError) {
+        const lan = await findBridgeOnLan()
+        const token = tokenRef.current ?? (await secureTokenStore.get())
+        if (lan) {
+          if (!lan.authorized) {
+            requirePairing(lan.base)
+            return false
+          }
+          if (token) {
+            try {
+              dispatch({ type: "pairingStarted" })
+              await fetchAndStream(lan.base, token)
+              connected = true
+              return true
+            } catch {
+              // fall through to the Bluetooth error
+            }
+          }
+        }
+        throw bleError
+      }
       const base = baseUrl(rendezvous.host, rendezvous.port)
       dispatch({ type: "pairingStarted", macName: rendezvous.host })
       const result = await establish(base)
@@ -370,19 +588,45 @@ export function useBridge() {
         setPairingCodeRequest(base)
         return false
       }
+      if (result === "revoked") {
+        requirePairing(base)
+        return false
+      }
+      connected = true
       return true
     } catch (error) {
-      dispatch({ type: "failed", message: (error as Error).message })
+      const message = (error as Error).message
+      const aborted = message === "ble scan cancelled" || message === "ble connect cancelled" || connectRequestedRef.current
+      if (!aborted) {
+        void diagnosticsRef.current.error(error, false)
+        dispatch({ type: "failed", message: friendlyConnectError(message) })
+        // One automatic second search after a transient Bluetooth failure, so the
+        // app does not wait for the user to tap again.
+        const retryable = !/permission|bluetooth is off|unsupported|pairing required/i.test(message)
+        if (!userInitiated && retryable && autoAttemptsRef.current < 1) {
+          autoAttemptsRef.current += 1
+          if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+          retryTimerRef.current = setTimeout(() => {
+            retryTimerRef.current = null
+            if (!manuallyDisconnectedRef.current) void connect()
+          }, 2000)
+        }
+      }
       return false
     } finally {
       connectingRef.current = false
+      if (!connected && connectRequestedRef.current) {
+        connectRequestedRef.current = false
+        void connect(true)
+      }
     }
-  }, [establish, handleDoorbell])
+  }, [establish, fetchAndStream, findBridgeOnLan, handleDoorbell, requirePairing])
 
   const connectManual = useCallback(
     async (hostPort: string) => {
       devLog("connectManual", hostPort)
       setManuallyDisconnected(false)
+      pairingRequiredRef.current = false
       const base = manualBase(hostPort)
       if (!base) {
         dispatch({ type: "failed", message: "Enter a valid address and port" })
@@ -392,12 +636,13 @@ export function useBridge() {
         dispatch({ type: "pairingStarted", macName: hostPort })
         const result = await establish(base)
         if (result === "needs-code") setPairingCodeRequest(base)
+        else if (result === "revoked") requirePairing(base)
       } catch (error) {
         devLog("connectManual failed", (error as Error).message)
         dispatch({ type: "failed", message: (error as Error).message })
       }
     },
-    [establish],
+    [establish, requirePairing],
   )
 
   // Try the last bridge this phone reached before falling back to discovery.
@@ -413,11 +658,68 @@ export function useBridge() {
         setPairingCodeRequest(base)
         return false
       }
-      return true
+      // A rejection here is not acted on: connect() will check the address the
+      // helper points at before asking the user to pair again.
+      return result === "connected"
     } catch {
       return false
     }
   }, [establish])
+
+  // A network change can move the computer to a new address. Probe the current one
+  // first (no needless Bluetooth work) and re-read the address over BLE only when it
+  // stopped answering or the app is already recovering.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let previous: NetworkIdentity | null = null
+
+    const applyChange = async (): Promise<void> => {
+      if (pairingRequiredRef.current) return
+      const action = networkChangeAction({
+        paired: pairedRef.current,
+        manuallyDisconnected: manuallyDisconnectedRef.current,
+        status: statusRef.current,
+      })
+      if (action === "ignore") return
+      if (action === "rediscover") {
+        await rediscoverAddress()
+        return
+      }
+      const base = baseRef.current
+      const token = tokenRef.current
+      if (!base || !token) return
+      try {
+        await fetchState(base, token, fetch, PROBE_TIMEOUT_MS)
+      } catch {
+        dispatch({ type: "disconnected" })
+        await rediscoverAddress()
+      }
+    }
+
+    void NetInfo.fetch().then((state) => {
+      const identity = networkIdentity(state)
+      if (identity) networkRef.current = identity
+    })
+
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const next = networkIdentity(state)
+      if (!next) return
+      networkRef.current = next
+      const changed = shouldRediscover(previous, next)
+      previous = next
+      if (!changed) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        void applyChange()
+      }, NETWORK_CHANGE_DEBOUNCE_MS)
+    })
+
+    return () => {
+      if (timer) clearTimeout(timer)
+      unsubscribe()
+    }
+  }, [rediscoverAddress])
 
   const submitPairingCode = useCallback(
     async (code: string) => {
@@ -452,6 +754,16 @@ export function useBridge() {
   const disconnect = useCallback(async () => {
     streamRef.current?.stop()
     streamRef.current = null
+    discoveryGenerationRef.current += 1
+    reconnectFailuresRef.current = 0
+    autoAttemptsRef.current = 0
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current)
+      retryTimerRef.current = null
+    }
+    pairingRequiredRef.current = false
+    setPairingCodeRequest(null)
+    setPairingCodeError(null)
     void bleRef.current?.disconnect()
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current)
@@ -726,10 +1038,9 @@ export function useBridge() {
       // first attempt can race the helper's advertising).
       void (async () => {
         if (await connectRemembered()) return
-        for (let attempt = 0; attempt < 5; attempt++) {
-          if (await connect()) return
-          await sleep(4000)
-        }
+        // One automatic attempt; a user tap can take over at any time, and a failed
+        // scan must not keep the connect action locked for minutes.
+        if (!pairingRequiredRef.current) void connect()
       })()
     }
 

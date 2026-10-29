@@ -14,8 +14,8 @@ use windows::Devices::Bluetooth::Advertisement::{
 };
 use windows::Devices::Bluetooth::GenericAttributeProfile::{
     GattCharacteristicProperties, GattLocalCharacteristic, GattLocalCharacteristicParameters,
-    GattLocalService, GattServiceProvider, GattServiceProviderAdvertisingParameters,
-    GattWriteRequestedEventArgs,
+    GattLocalService, GattReadRequestedEventArgs, GattServiceProvider,
+    GattServiceProviderAdvertisingParameters, GattWriteRequestedEventArgs,
 };
 use windows::Foundation::TypedEventHandler;
 use windows::Storage::Streams::{DataWriter, IBuffer};
@@ -23,13 +23,11 @@ use windows::Storage::Streams::{DataWriter, IBuffer};
 use super::Peripheral;
 use crate::contract;
 
-pub struct WindowsPeripheral {
-    rendezvous: String,
-}
+pub struct WindowsPeripheral;
 
 impl WindowsPeripheral {
-    pub fn new(rendezvous: String) -> Self {
-        Self { rendezvous }
+    pub fn new(_rendezvous: String) -> Self {
+        Self
     }
 }
 
@@ -39,7 +37,7 @@ impl Peripheral for WindowsPeripheral {
     }
 
     fn run(self: Box<Self>, doorbells: Receiver<Value>) -> anyhow::Result<()> {
-        match serve(&self.rendezvous) {
+        match serve() {
             Ok(served) => run_doorbells(served, doorbells),
             Err(err) => {
                 eprintln!("[windows] BLE unavailable: {err:#}");
@@ -63,7 +61,7 @@ struct Served {
     doorbell: GattLocalCharacteristic,
 }
 
-fn serve(rendezvous: &str) -> anyhow::Result<Served> {
+fn serve() -> anyhow::Result<Served> {
     let service_guid = guid(contract::SERVICE_UUID)?;
 
     let provider = block_on(async move {
@@ -77,8 +75,32 @@ fn serve(rendezvous: &str) -> anyhow::Result<Served> {
         &service,
         guid(contract::RENDEZVOUS_UUID)?,
         GattCharacteristicProperties::Read,
-        Some(rendezvous.as_bytes().to_vec()),
+        None,
     ))?;
+    // Resolve the address on every read so a host that changed networks hands out
+    // its current address instead of the one seen at startup.
+    rendezvous_char.ReadRequested(&TypedEventHandler::<
+        GattLocalCharacteristic,
+        GattReadRequestedEventArgs,
+    >::new(|_sender, args| {
+        let args = args.ok()?;
+        let deferral = args.GetDeferral()?;
+        let operation = args.GetRequestAsync()?;
+        std::thread::spawn(move || {
+            if let Ok(request) = block_on(async move { operation.await }) {
+                let value = crate::lan::rendezvous_value();
+                let responded = match buffer_from_bytes(value.as_bytes()) {
+                    Ok(buffer) => request.RespondWithValue(&buffer).is_ok(),
+                    Err(_) => false,
+                };
+                if !responded {
+                    let _ = request.RespondWithProtocolError(0x80);
+                }
+            }
+            let _ = deferral.Complete();
+        });
+        Ok(())
+    }))?;
     let doorbell_char = block_on(characteristic(
         &service,
         guid(contract::DOORBELL_UUID)?,

@@ -6,7 +6,7 @@ import { buildBridge } from "../src/bridge.js"
 function newBridge(overrides = {}) {
   const calls = { permission: [], question: [], prompt: [], start: [], stop: [], close: [], switch: [] }
   const bridge = buildBridge({
-    config: { port: 0, keepaliveMs: 30, host: "127.0.0.1" },
+    config: { port: 0, keepaliveMs: 30, host: "127.0.0.1", pairingStorePath: null },
     applyPermission: async (args) => calls.permission.push(args),
     applyQuestion: async (args) => calls.question.push(args),
     applyPrompt: async (args) => calls.prompt.push(args),

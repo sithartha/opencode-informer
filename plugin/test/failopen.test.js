@@ -15,7 +15,7 @@ test("the doorbell tolerates an absent or invalid helper URL", async () => {
 })
 
 test("events are handled and broadcast with no client connected", async (t) => {
-  const bridge = buildBridge({ config: { port: 0, keepaliveMs: 0 } })
+  const bridge = buildBridge({ config: { port: 0, keepaliveMs: 0, pairingStorePath: null } })
   await bridge.server.start()
   t.after(() => bridge.server.stop())
 
@@ -29,7 +29,7 @@ test("events are handled and broadcast with no client connected", async (t) => {
 
 test("a hanging apply times out instead of blocking", async (t) => {
   const bridge = buildBridge({
-    config: { port: 0, keepaliveMs: 0 },
+    config: { port: 0, keepaliveMs: 0, pairingStorePath: null },
     applyTimeoutMs: 30,
     applyPermission: () => new Promise(() => {}),
   })
@@ -43,7 +43,7 @@ test("a hanging apply times out instead of blocking", async (t) => {
 })
 
 test("a stream client disconnecting leaves the server healthy", async (t) => {
-  const bridge = buildBridge({ config: { port: 0, keepaliveMs: 0 } })
+  const bridge = buildBridge({ config: { port: 0, keepaliveMs: 0, pairingStorePath: null } })
   await bridge.server.start()
   t.after(() => bridge.server.stop())
   const port = bridge.server.address().port

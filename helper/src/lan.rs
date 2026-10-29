@@ -49,3 +49,24 @@ pub fn rendezvous_value() -> String {
     let host = lan_address().unwrap_or_else(|| "127.0.0.1".to_string());
     format!("{host}:{}", crate::contract::BRIDGE_PORT)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::contract::BRIDGE_PORT;
+
+    #[test]
+    fn rendezvous_value_is_host_and_bridge_port() {
+        let value = rendezvous_value();
+        let (host, port) = value.rsplit_once(':').expect("rendezvous should be host:port");
+        assert!(!host.is_empty());
+        assert_eq!(port, BRIDGE_PORT.to_string());
+    }
+
+    #[test]
+    fn lan_address_is_never_a_loopback_when_one_is_available() {
+        if let Some(address) = lan_address() {
+            assert!(!address.starts_with("127."), "unexpected loopback address {address}");
+        }
+    }
+}

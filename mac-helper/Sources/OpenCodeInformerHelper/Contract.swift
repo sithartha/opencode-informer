@@ -18,9 +18,12 @@ enum Contract {
         "\(lanAddress() ?? "127.0.0.1"):\(bridgePort)"
     }
 
-    /// Primary IPv4 address of the Mac on the LAN (en0/en1).
+    /// Primary IPv4 address of the Mac on the LAN: en0/en1 first, then any other
+    /// non-loopback interface, so Ethernet, Thunderbolt or a hotspot still work after
+    /// the machine changes networks.
     static func lanAddress() -> String? {
-        var result: String?
+        var preferred: String?
+        var fallback: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
         defer { freeifaddrs(ifaddr) }
@@ -30,13 +33,16 @@ enum Contract {
             let interface = pointer.pointee
             if let addr = interface.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET) {
                 let name = String(cString: interface.ifa_name)
-                if name == "en0" || name == "en1" {
-                    var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                    if getnameinfo(addr, socklen_t(addr.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
-                        let value = String(cString: host)
-                        if !value.isEmpty {
-                            result = value
+                var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(addr, socklen_t(addr.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
+                    let value = String(cString: host)
+                    if !value.isEmpty {
+                        if name == "en0" || name == "en1" {
+                            preferred = value
                             break
+                        }
+                        if fallback == nil && !name.hasPrefix("lo") {
+                            fallback = value
                         }
                     }
                 }
@@ -44,6 +50,6 @@ enum Contract {
             guard let next = interface.ifa_next else { break }
             pointer = next
         }
-        return result
+        return preferred ?? fallback
     }
 }

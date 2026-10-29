@@ -22,13 +22,11 @@ use tokio::sync::watch;
 use super::Peripheral;
 use crate::contract;
 
-pub struct LinuxPeripheral {
-    rendezvous: String,
-}
+pub struct LinuxPeripheral;
 
 impl LinuxPeripheral {
-    pub fn new(rendezvous: String) -> Self {
-        Self { rendezvous }
+    pub fn new(_rendezvous: String) -> Self {
+        Self
     }
 }
 
@@ -41,11 +39,11 @@ impl Peripheral for LinuxPeripheral {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
-        runtime.block_on(run_async(self.rendezvous, doorbells))
+        runtime.block_on(run_async(doorbells))
     }
 }
 
-async fn run_async(rendezvous: String, doorbells: Receiver<Value>) -> anyhow::Result<()> {
+async fn run_async(doorbells: Receiver<Value>) -> anyhow::Result<()> {
     // Bridge the std doorbell channel to a `watch` that always holds the latest
     // doorbell, so a subscriber that connects later still receives the last one.
     let (watch_tx, watch_rx) = watch::channel::<Option<Vec<u8>>>(None);
@@ -56,7 +54,7 @@ async fn run_async(rendezvous: String, doorbells: Receiver<Value>) -> anyhow::Re
         }
     });
 
-    let handles = prepare(rendezvous, watch_rx).await;
+    let handles = prepare(watch_rx).await;
     if let Err(err) = &handles {
         eprintln!("[linux] BLE unavailable: {err:#}");
         eprintln!(
@@ -73,7 +71,6 @@ async fn run_async(rendezvous: String, doorbells: Receiver<Value>) -> anyhow::Re
 }
 
 async fn prepare(
-    rendezvous: String,
     watch_rx: watch::Receiver<Option<Vec<u8>>>,
 ) -> anyhow::Result<(ApplicationHandle, AdvertisementHandle)> {
     let session = bluer::Session::new().await?;
@@ -89,8 +86,6 @@ async fn prepare(
     let doorbell_uuid = parse_uuid(contract::DOORBELL_UUID)?;
     let rendezvous_uuid = parse_uuid(contract::RENDEZVOUS_UUID)?;
     let pairing_uuid = parse_uuid(contract::PAIRING_UUID)?;
-
-    let rendezvous_bytes = rendezvous.into_bytes();
 
     let doorbell_rx = watch_rx.clone();
     let doorbell = Characteristic {
@@ -132,7 +127,9 @@ async fn prepare(
         read: Some(CharacteristicRead {
             read: true,
             fun: Box::new(move |_req| {
-                let value = rendezvous_bytes.clone();
+                // Resolve on every read so a host that changed networks hands out
+                // its current address instead of the one seen at startup.
+                let value = crate::lan::rendezvous_value().into_bytes();
                 async move { Ok(value) }.boxed()
             }),
             ..Default::default()
@@ -170,7 +167,6 @@ async fn prepare(
 
     let advertisement = Advertisement {
         service_uuids: [service_uuid].into_iter().collect(),
-        local_name: Some(contract::LOCAL_NAME.to_string()),
         discoverable: Some(true),
         ..Default::default()
     };

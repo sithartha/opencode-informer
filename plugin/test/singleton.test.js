@@ -15,13 +15,13 @@ function fakeCtx() {
 }
 
 test("setup binds only once per process (singleton guard)", async (t) => {
-  const first = await setup(fakeCtx(), { config: { port: 0, keepaliveMs: 0 } })
+  const first = await setup(fakeCtx(), { config: { port: 0, keepaliveMs: 0, pairingStorePath: null }, listSessions: async () => [] })
   t.after(() => first.stop())
 
   const firstPort = first.server.address().port
   assert.ok(firstPort > 0)
 
-  const second = await setup(fakeCtx(), { config: { port: 0, keepaliveMs: 0 } })
+  const second = await setup(fakeCtx(), { config: { port: 0, keepaliveMs: 0, pairingStorePath: null }, listSessions: async () => [] })
   assert.equal(second, first, "second setup must reuse the running bridge")
   assert.equal(second.server.address().port, firstPort, "no second listener is created")
 

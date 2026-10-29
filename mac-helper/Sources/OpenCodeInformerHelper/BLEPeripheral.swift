@@ -11,6 +11,7 @@ final class BLEPeripheral: NSObject, CBPeripheralManagerDelegate {
 
     private var pending: [Data] = []
     private var centralConnected = false
+    private var serviceAdded = false
 
     /// Human-readable status for the menu bar.
     var onStatusChange: ((String) -> Void)?
@@ -52,12 +53,11 @@ final class BLEPeripheral: NSObject, CBPeripheralManagerDelegate {
 
         let service = CBMutableService(type: Contract.serviceUUID, primary: true)
         service.characteristics = [doorbell, rendezvous, pairing]
+        serviceAdded = true
+        // Wait for didAdd before advertising: starting immediately can advertise the
+        // UUID before the GATT database is ready, so a central connects and discovers
+        // no service.
         manager.add(service)
-        manager.startAdvertising([
-            CBAdvertisementDataServiceUUIDsKey: [Contract.serviceUUID],
-            CBAdvertisementDataLocalNameKey: "OpenCodeInformer",
-        ])
-        onStatusChange?("advertising")
     }
 
     // MARK: - Doorbell
@@ -104,8 +104,15 @@ final class BLEPeripheral: NSObject, CBPeripheralManagerDelegate {
 
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
         if peripheral.state == .poweredOn {
-            advertise()
+            if !serviceAdded {
+                advertise()
+            } else {
+                startAdvertising()
+            }
         } else {
+            // The system drops registered services when Bluetooth turns off.
+            serviceAdded = false
+            centralConnected = false
             onStatusChange?("Bluetooth state \(peripheral.state.rawValue)")
         }
     }
@@ -133,17 +140,19 @@ final class BLEPeripheral: NSObject, CBPeripheralManagerDelegate {
     }
 
     private func startAdvertising() {
-        manager?.startAdvertising([
+        guard let manager, !manager.isAdvertising else { return }
+        manager.startAdvertising([
             CBAdvertisementDataServiceUUIDsKey: [Contract.serviceUUID],
-            CBAdvertisementDataLocalNameKey: "OpenCodeInformer",
         ])
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
         if let error {
+            serviceAdded = false
             onStatusChange?("add service failed: \(error.localizedDescription)")
         } else {
             onStatusChange?("service added")
+            startAdvertising()
         }
     }
 
