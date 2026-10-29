@@ -1,14 +1,16 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import type { Theme } from "../src/theme"
-import { avatarColor, avatarIdentity, avatarMood } from "../src/avatar"
+import { avatarColor, avatarCut, avatarIdentity, avatarMood } from "../src/avatar"
 
 const theme = {
   dark: false,
+  skin: "default",
   accent: "#111111",
   secondaryAccent: "#222222",
   allow: "#333333",
   deny: "#444444",
+  textMuted: "#999999",
   questionBorder: ["#555555", "#666666"],
   permissionBorder: ["#777777", "#888888"],
 } as unknown as Theme
@@ -30,9 +32,19 @@ test("completed and ended sessions settle", () => {
   assert.equal(avatarMood("unknown"), "idle")
 })
 
-test("every avatar is a circle", () => {
+test("every avatar defaults to a circle", () => {
   assert.equal(avatarIdentity("opencode", "s1").cut, "circle")
   assert.equal(avatarIdentity("build", "s9").cut, "circle")
+})
+
+test("the theme's corner style picks the avatar silhouette", () => {
+  assert.equal(avatarCut(theme), "circle")
+  for (const skin of ["default", "sanrio", "starwars", "classic-os", "wizard"] as const) {
+    assert.equal(avatarCut({ ...theme, skin } as Theme), "circle", skin)
+  }
+  for (const skin of ["evangelion", "tunes", "terminal"] as const) {
+    assert.equal(avatarCut({ ...theme, skin } as Theme), "square", skin)
+  }
 })
 
 test("the same session always gets the same face", () => {
@@ -56,6 +68,11 @@ test("the identity has a three-value seed in range", () => {
   for (const value of look.seed) assert.ok(value >= 0 && value <= Math.PI * 2)
 })
 
-test("the avatar colour is the active theme accent", () => {
+test("the avatar colour follows the session mode", () => {
   assert.equal(avatarColor(theme), "#111111")
+  assert.equal(avatarColor(theme, "running"), "#333333")
+  assert.equal(avatarColor(theme, "waiting-permission"), "#777777")
+  assert.equal(avatarColor(theme, "waiting-answer"), "#555555")
+  assert.equal(avatarColor(theme, "completed"), "#999999")
+  assert.equal(avatarColor(theme, "ended"), "#999999")
 })

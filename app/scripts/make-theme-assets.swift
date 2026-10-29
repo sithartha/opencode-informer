@@ -107,6 +107,22 @@ render(path: "\(root)/assets/liveActivity/mark-bolt-gold.png", size: 256) { bolt
 render(path: "\(root)/assets/liveActivity/mark-bolt-orange.png", size: 256) { bolt($0, color: orange) }
 render(path: "\(root)/assets/liveActivity/mark-os.png", size: 256, flag)
 
+// Terminal: a square frame with the `>_` prompt in a monospace face.
+func terminalMark(_ size: CGFloat) {
+  let inset = size * 0.08
+  let frame = NSBezierPath(rect: NSRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2))
+  frame.lineWidth = max(2, size * 0.035)
+  NSColor.white.setStroke()
+  frame.stroke()
+
+  let text = ">_" as NSString
+  let font = NSFont.monospacedSystemFont(ofSize: size * 0.36, weight: .bold)
+  let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.white]
+  let textSize = text.size(withAttributes: attributes)
+  text.draw(at: NSPoint(x: (size - textSize.width) / 2, y: (size - textSize.height) / 2), withAttributes: attributes)
+}
+render(path: "\(root)/assets/liveActivity/mark-terminal.png", size: 256, terminalMark)
+
 // Wizard house crests, one per house (primary + secondary colours).
 let crests: [(String, NSColor, NSColor)] = [
   ("gryffindor", NSColor(red: 0.68, green: 0.0, blue: 0.004, alpha: 1), NSColor(red: 0.83, green: 0.65, blue: 0.145, alpha: 1)),

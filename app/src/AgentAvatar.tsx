@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { AccessibilityInfo, View, type StyleProp, type ViewStyle } from "react-native"
 import { Moodstone } from "moodstone"
-import { avatarColor, avatarIdentity, avatarMood } from "./avatar"
+import { avatarColor, avatarCut, avatarIdentity, avatarMood } from "./avatar"
 import type { Theme } from "./theme"
 
 /** Follow the device's Reduce Motion setting, including changes while the app runs. */
@@ -45,10 +45,11 @@ export function AgentAvatar({
   style?: StyleProp<ViewStyle>
 }) {
   const reduceMotion = useReduceMotion()
-  const identity = useMemo(() => avatarIdentity(agent, sessionId), [agent, sessionId])
+  const cut = avatarCut(theme)
+  const identity = useMemo(() => avatarIdentity(agent, sessionId, cut), [agent, sessionId, cut])
   const mood = avatarMood(phase, currentTool)
   if (process.env.EXPO_PUBLIC_BLE_DEBUG) {
-    console.warn("[avatar]", sessionId ?? agent ?? "-", identity.cut, avatarColor(theme))
+    console.warn("[avatar]", sessionId ?? agent ?? "-", identity.cut, avatarColor(theme, phase))
   }
   return (
     <View
@@ -60,7 +61,7 @@ export function AgentAvatar({
       <Moodstone
         mood={mood}
         cut={identity.cut}
-        color={avatarColor(theme)}
+        color={avatarColor(theme, phase)}
         eyeColor={theme.dark ? "white" : "black"}
         seed={identity.seed}
         size={size}

@@ -12,6 +12,7 @@ export function createStyles(t: Theme): Styles {
   if (t.skin === "sanrio") return createSanrioStyles(t)
   if (t.skin === "tunes") return createTunesStyles(t)
   if (t.skin === "classic-os") return createClassicOSStyles(t)
+  if (t.skin === "terminal") return createTerminalStyles(t)
   return createDefaultStyles(t)
 }
 
@@ -42,6 +43,12 @@ function createDefaultStyles(t: Theme) {
     heroStat: { flexDirection: "row", alignItems: "center", gap: 6 },
     heroStatText: { fontSize: 12, color: t.textSecondary },
     heroWatermark: { position: "absolute", right: -28, top: -18, opacity: 0.12 },
+    termTitleBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", borderBottomWidth: 1, borderBottomColor: t.border, paddingBottom: 6, marginBottom: 4 },
+    termTitle: { fontSize: 12, fontWeight: "700", color: t.text, letterSpacing: 1 },
+    termStatus: { fontSize: 11, fontWeight: "700", color: t.textSecondary, letterSpacing: 1 },
+    termPrompt: { fontSize: 13, fontWeight: "700", color: t.text, letterSpacing: 0.5, marginTop: 2 },
+    termTitleRow: { flexDirection: "row", alignItems: "center" },
+    termMarker: { fontSize: 13, fontWeight: "700", marginRight: 6 },
     magiHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" },
     magiTitle: { fontSize: 12, fontWeight: "700", color: t.accent, letterSpacing: 2 },
     magiStatus: { fontSize: 12, fontWeight: "600", color: t.textSecondary, letterSpacing: 1 },
@@ -182,7 +189,9 @@ function createDefaultStyles(t: Theme) {
     layoutToggleText: { fontSize: 11, fontWeight: "600", color: t.textSecondary },
     layoutToggleTextActive: { color: "#ffffff" },
     sessionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-    compactCard: { flex: 1, padding: 12, gap: 8, minHeight: 136 },
+    compactCard: { flex: 1, padding: 12, gap: 4, minHeight: 96 },
+    compactCardRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+    compactCardBody: { flex: 1, gap: 2 },
     compactHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     compactTitle: { fontSize: 14, fontWeight: "600", color: t.text, lineHeight: 18 },
     compactPhaseRow: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -419,7 +428,7 @@ function createHudStyles(t: Theme, R: number, R_INNER: number, R_CHIP: number, u
     layoutToggleText: { fontSize: 10, fontWeight: "700", color: t.textSecondary, letterSpacing: 1, fontFamily: MONO },
     layoutToggleTextActive: { color: "#ffffff" },
     sessionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-    compactCard: { flex: 1, padding: 10, gap: 8, minHeight: 136 },
+    compactCard: { flex: 1, padding: 10, gap: 4, minHeight: 96 },
     compactHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
     compactTitle: { fontSize: 13, fontWeight: "700", color: t.text, letterSpacing: 0.3, lineHeight: 17 },
     compactPhaseRow: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -549,6 +558,67 @@ function createTunesStyles(t: Theme): Styles {
     heroCount: { ...base.heroCount, fontFamily: MONO, color: t.accent },
     heroLabel: { ...base.heroLabel, fontFamily: MONO, letterSpacing: 0.5 },
     heroStatus: { ...base.heroStatus, fontFamily: MONO, color: t.accent, letterSpacing: 1 },
+  } as unknown as Styles
+}
+
+// --- Terminal: bash / TUI chrome - square corners, console type, no gradients or glows ---
+function createTerminalStyles(t: Theme): Styles {
+  const base = createDefaultStyles(t)
+  // A TUI has no rounded chrome and no depth: flatten every registered style,
+  // then move every text style to the console font.
+  const flat = Object.fromEntries(
+    Object.entries(base).map(([key, raw]) => {
+      const style = { ...(raw as Record<string, unknown>) }
+      if ("borderRadius" in style) style.borderRadius = 0
+      if ("fontSize" in style) style.fontFamily = MONO
+      if ("shadowColor" in style) style.shadowColor = "transparent"
+      if ("shadowOpacity" in style) style.shadowOpacity = 0
+      if ("elevation" in style) style.elevation = 0
+      return [key, style]
+    }),
+  ) as unknown as ReturnType<typeof createDefaultStyles>
+  return {
+    ...flat,
+    title: { ...flat.title, letterSpacing: 1 },
+    settingsLink: { ...flat.settingsLink, textDecorationLine: "underline" },
+    statusPill: { ...flat.statusPill, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border },
+    statusText: { ...flat.statusText, color: t.text },
+    heroWatermark: { ...flat.heroWatermark, opacity: 0.1 },
+    heroSecondary: { ...flat.heroSecondary, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border },
+    input: { ...flat.input, backgroundColor: t.surface },
+    inputFull: { ...flat.inputFull, backgroundColor: t.surface },
+    segment: { ...flat.segment, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border, gap: 0, padding: 0 },
+    segmentSelected: { ...flat.segmentSelected, minHeight: 42 },
+    segmentUnselected: { ...flat.segmentUnselected, minHeight: 42 },
+    segmentText: { ...flat.segmentText, color: t.textSecondary },
+    segmentTextSelected: { ...flat.segmentTextSelected, color: t.background },
+    themeCard: { ...flat.themeCard, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
+    themeCardSelected: { ...flat.themeCardSelected, borderColor: t.text, borderWidth: 2 },
+    themeCardText: { ...flat.themeCardText, color: t.text },
+    themePreview: { ...flat.themePreview, backgroundColor: t.surface },
+    badge: { ...flat.badge, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border, color: t.text },
+    metaChip: { ...flat.metaChip, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border, color: t.textSecondary },
+    dirChip: { ...flat.dirChip, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border, color: t.text },
+    costChip: { ...flat.costChip, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border, color: t.text },
+    stopButton: { ...flat.stopButton, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border },
+    stopButtonText: { ...flat.stopButtonText, color: t.text },
+    gradientButtonText: { ...flat.gradientButtonText, color: t.background },
+    actionText: { ...flat.actionText, color: t.background },
+    sessionsPill: { ...flat.sessionsPill, backgroundColor: t.text },
+    sessionsPillText: { ...flat.sessionsPillText, color: t.background },
+    layoutToggle: { ...flat.layoutToggle, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border, gap: 0, padding: 0 },
+    layoutToggleItemActive: { ...flat.layoutToggleItemActive, backgroundColor: t.text },
+    layoutToggleTextActive: { ...flat.layoutToggleTextActive, color: t.background },
+    compactServerPill: { ...flat.compactServerPill, backgroundColor: "transparent", borderWidth: 1, borderColor: t.border },
+    compactHero: { ...flat.compactHero, borderBottomColor: t.border },
+    section: { ...flat.section, color: t.text, borderBottomWidth: 1, borderBottomColor: t.border, paddingBottom: 4 },
+    cardTitle: { ...flat.cardTitle, color: t.text },
+    inlinePendingTitle: { ...flat.inlinePendingTitle, color: t.text },
+    inlinePendingBody: { ...flat.inlinePendingBody, color: t.textSecondary },
+    moreLink: { ...flat.moreLink, color: t.text, textDecorationLine: "underline" },
+    tipBuyBtn: { ...flat.tipBuyBtn, borderColor: t.text },
+    tipCardRecommended: { ...flat.tipCardRecommended, borderColor: t.text },
+    confirmTitle: { ...flat.confirmTitle, color: t.text },
   } as unknown as Styles
 }
 

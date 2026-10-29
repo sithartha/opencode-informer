@@ -52,6 +52,8 @@ export function activityMark(theme: Theme | null): string {
       return "mark-os"
     case "wizard":
       return `mark-crest-${theme.variant ?? "gryffindor"}`
+    case "terminal":
+      return "mark-terminal"
     default:
       return "oi"
   }
@@ -72,6 +74,8 @@ export function activityLabel(theme: Theme | null): string {
       return "CLASSIC OS"
     case "wizard":
       return (theme.variant ?? "gryffindor").toUpperCase()
+    case "terminal":
+      return "TERMINAL"
     default:
       return ""
   }
@@ -94,6 +98,8 @@ export function activityStatus(theme: Theme | null, agg: Aggregate): string {
       return attention ? "NEEDS YOU" : idle ? "IDLE" : "ACTIVE"
     case "wizard":
       return attention ? "ALERT" : idle ? "IDLE" : "READY"
+    case "terminal":
+      return attention ? "[ needs you ]" : idle ? "[ idle ]" : "[ ready ]"
     default:
       return attention ? "NEEDS YOU" : idle ? "IDLE" : "ALL CLEAR"
   }

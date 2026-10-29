@@ -9,6 +9,7 @@ import { dirName } from "./paths"
 import { formatCost } from "./format"
 import { FadeIn, GlowDot, GradientSurface, HazardBar, PressableScale, Scanlines, TelemetryBars } from "./ui"
 import { ThemeMark } from "./themeMark"
+import { ScreenBackdrop } from "./terminalArt"
 import { AgentAvatar } from "./AgentAvatar"
 import type { Styles } from "./styles"
 
@@ -17,6 +18,20 @@ export const PHASE_COLORS: Record<string, string> = {
   "waiting-permission": "#ef6c00",
   "waiting-answer": "#1565c0",
   completed: "#616161",
+}
+
+/** The colour of a phase indicator; the Terminal skin derives it from its own tokens. */
+export function phaseColor(theme: Theme, phase: string): string {
+  if (theme.skin !== "terminal") return PHASE_COLORS[phase] ?? theme.textMuted
+  if (phase === "running") return theme.allow
+  if (phase === "waiting-permission") return theme.permissionBorder[0]
+  if (phase === "waiting-answer") return theme.questionBorder[0]
+  return theme.textMuted
+}
+
+/** The Terminal skin keeps action buttons monochrome; other skins keep their semantic fill. */
+function actionFill(theme: Theme, semantic: string): string {
+  return theme.skin === "terminal" ? theme.text : semantic
 }
 
 export type Resolve = (id: string, action: string, answers?: Record<string, string | string[]>) => void
@@ -123,7 +138,7 @@ export function InlineInput({
         accessibilityLabel={placeholder}
       />
       <PressableScale onPress={submit} accessibilityLabel={submitLabel}>
-        <View style={[styles.actionInner, { backgroundColor: theme.option }]}>
+        <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.option) }]}>
           <Text style={styles.actionText}>{submitLabel}</Text>
         </View>
       </PressableScale>
@@ -208,7 +223,7 @@ function OptionButton({
     <View style={styles.optionRow}>
       <View style={styles.optionButtonWrap}>
         <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel}>
-          <View style={[styles.actionInner, { backgroundColor: theme.option, opacity }]}>
+          <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.option), opacity }]}>
             <Text style={styles.actionText}>{option.label}</Text>
           </View>
         </PressableScale>
@@ -294,7 +309,7 @@ export function MultiSelectQuestion({
           onPress={() => complete && resolve(requestID, selected.join(", "), { [question.key]: selected })}
           accessibilityLabel="Submit answers"
         >
-          <View style={[styles.actionInner, { backgroundColor: theme.allow, opacity: complete ? 1 : 0.5 }]}>
+          <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow), opacity: complete ? 1 : 0.5 }]}>
             <Text style={styles.actionText}>Submit</Text>
           </View>
         </PressableScale>
@@ -373,7 +388,7 @@ export function MultiQuestionForm({
           onPress={() => complete && resolve(request.requestID, answerText(answers[questions[0].key]), answers)}
           accessibilityLabel="Submit answers"
         >
-          <View style={[styles.actionInner, { backgroundColor: theme.allow, opacity: complete ? 1 : 0.5 }]}>
+          <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow), opacity: complete ? 1 : 0.5 }]}>
             <Text style={styles.actionText}>Submit</Text>
           </View>
         </PressableScale>
@@ -399,12 +414,12 @@ export function PendingActions({
     return (
       <View style={styles.actions}>
         <PressableScale onPress={() => resolve(request.requestID, "allow")} accessibilityLabel="Allow">
-          <View style={[styles.actionInner, { backgroundColor: theme.allow }]}>
+          <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
             <Text style={styles.actionText}>Allow</Text>
           </View>
         </PressableScale>
         <PressableScale onPress={() => resolve(request.requestID, "deny")} accessibilityLabel="Deny">
-          <View style={[styles.actionInner, { backgroundColor: theme.deny }]}>
+          <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.deny) }]}>
             <Text style={styles.actionText}>Deny</Text>
           </View>
         </PressableScale>
@@ -490,6 +505,7 @@ export function HeroCard({
   const isTunes = theme.skin === "tunes"
   const isClassicOS = theme.skin === "classic-os"
   const isWizard = theme.skin === "wizard"
+  const isTerminal = theme.skin === "terminal"
   const unit = theme.variant === "unit00" ? "00" : theme.variant === "unit02" ? "02" : "01"
   // MAGI cores: the three supercomputer brains mapped to the attention states.
   const cores = [
@@ -502,10 +518,10 @@ export function HeroCard({
       colors={border}
       glow={glow}
       pulse={hasAttention}
-      shimmer={hasAttention}
-      shimmerLoop={hasAttention}
-      animatedBorder={hasAttention}
-      radius={isSanrio ? 30 : isTunes ? 0 : isClassicOS ? 10 : 22}
+      shimmer={hasAttention && !isTerminal}
+      shimmerLoop={hasAttention && !isTerminal}
+      animatedBorder={hasAttention && !isTerminal}
+      radius={isTerminal ? 0 : isSanrio ? 30 : isTunes ? 0 : isClassicOS ? 10 : 22}
       nerv={nerv}
       rail={isStarWars}
       innerStyle={{ backgroundColor: theme.surface }}
@@ -622,6 +638,15 @@ export function HeroCard({
             </View>
           </>
         ) : null}
+        {isTerminal ? (
+          <>
+            <View style={styles.termTitleBar}>
+              <Text style={styles.termTitle}>+-- open-island --+</Text>
+              <Text style={styles.termStatus}>{hasAttention ? "[ needs you ]" : idle ? "[ idle ]" : "[ ready ]"}</Text>
+            </View>
+            <Text style={styles.termPrompt}>$ status --needs-you</Text>
+          </>
+        ) : null}
         {hasAttention ? (
           <>
             <Text style={styles.heroCount}>{needsYou}</Text>
@@ -694,22 +719,22 @@ export function HeroCard({
           <>
             <View style={styles.heroBreakdown}>
               <View style={styles.heroStat}>
-                <GlowDot color={PHASE_COLORS.running} size={7} pulse={agg.running > 0} />
+                <GlowDot color={phaseColor(theme, "running")} size={7} pulse={agg.running > 0} glyph={isTerminal} />
                 <Text style={styles.heroStatText}>{agg.running} working</Text>
               </View>
               <View style={styles.heroStat}>
-                <GlowDot color={PHASE_COLORS.completed} size={7} />
+                <GlowDot color={phaseColor(theme, "completed")} size={7} glyph={isTerminal} />
                 <Text style={styles.heroStatText}>{agg.stopped} inactive</Text>
               </View>
             </View>
             {hasAttention ? (
               <View style={[styles.heroBreakdown, styles.heroBreakdownSecond]}>
                 <View style={styles.heroStat}>
-                  <GlowDot color={PHASE_COLORS["waiting-permission"]} size={7} pulse={agg.waitingApproval > 0} />
+                  <GlowDot color={phaseColor(theme, "waiting-permission")} size={7} pulse={agg.waitingApproval > 0} glyph={isTerminal} />
                   <Text style={styles.heroStatText}>{agg.waitingApproval} permission</Text>
                 </View>
                 <View style={styles.heroStat}>
-                  <GlowDot color={PHASE_COLORS["waiting-answer"]} size={7} pulse={agg.waitingAnswer > 0} />
+                  <GlowDot color={phaseColor(theme, "waiting-answer")} size={7} pulse={agg.waitingAnswer > 0} glyph={isTerminal} />
                   <Text style={styles.heroStatText}>{agg.waitingAnswer} question</Text>
                 </View>
               </View>
@@ -731,7 +756,7 @@ export function HeroCard({
                 label={`Review ${needsYou} waiting`}
                 onPress={onReviewWaiting}
                 styles={styles}
-                colors={agg.waitingApproval > 0 ? theme.permissionBorder : theme.questionBorder}
+                colors={isTerminal ? theme.accentGradient : agg.waitingApproval > 0 ? theme.permissionBorder : theme.questionBorder}
               />
             ) : null}
             {onStart ? (
@@ -769,10 +794,10 @@ export function CompactHero({
   styles: Styles
 }) {
   const stats = [
-    { color: PHASE_COLORS.running, count: agg.running, pulse: agg.running > 0 },
-    { color: PHASE_COLORS["waiting-permission"], count: agg.waitingApproval, pulse: agg.waitingApproval > 0 },
-    { color: PHASE_COLORS["waiting-answer"], count: agg.waitingAnswer, pulse: agg.waitingAnswer > 0 },
-    { color: PHASE_COLORS.completed, count: agg.stopped, pulse: false },
+    { color: phaseColor(theme, "running"), count: agg.running, pulse: agg.running > 0 },
+    { color: phaseColor(theme, "waiting-permission"), count: agg.waitingApproval, pulse: agg.waitingApproval > 0 },
+    { color: phaseColor(theme, "waiting-answer"), count: agg.waitingAnswer, pulse: agg.waitingAnswer > 0 },
+    { color: phaseColor(theme, "completed"), count: agg.stopped, pulse: false },
   ]
   return (
     <View style={styles.compactRow}>
@@ -780,7 +805,7 @@ export function CompactHero({
         <ThemeMark theme={theme} size={26} />
         {server ? (
           <View style={styles.compactServerPill}>
-            <GlowDot color={connected ? theme.allow : theme.deny} size={6} pulse={!connected} />
+            <GlowDot color={connected ? theme.allow : theme.deny} size={6} pulse={!connected} glyph={theme.skin === "terminal"} />
             <Text style={styles.compactServerText} numberOfLines={1}>
               {server}
             </Text>
@@ -790,7 +815,7 @@ export function CompactHero({
       <View style={styles.compactDots}>
         {stats.map((stat, index) => (
           <View key={index} style={styles.compactItem}>
-            <GlowDot color={stat.color} size={8} pulse={stat.pulse} />
+            <GlowDot color={stat.color} size={8} pulse={stat.pulse} glyph={theme.skin === "terminal"} />
             <Text style={styles.compactCount}>{stat.count}</Text>
           </View>
         ))}
@@ -831,7 +856,7 @@ export function ConfirmModal({
               </View>
             </PressableScale>
             <PressableScale onPress={onConfirm} accessibilityLabel={confirmLabel}>
-              <View style={[styles.actionInner, { backgroundColor: theme.deny }]}>
+              <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.deny) }]}>
                 <Text style={styles.actionText}>{confirmLabel}</Text>
               </View>
             </PressableScale>
@@ -965,7 +990,7 @@ export function ManualConnectModal({
               </View>
             </PressableScale>
             <PressableScale onPress={() => onConnect(address, port)} accessibilityLabel="Connect">
-              <View style={[styles.actionInner, { backgroundColor: theme.allow }]}>
+              <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
                 <Text style={styles.actionText}>Connect</Text>
               </View>
             </PressableScale>
@@ -1019,7 +1044,7 @@ export function PairingCodeModal({
               </View>
             </PressableScale>
             <PressableScale onPress={() => onSubmit(code)} accessibilityLabel="Pair">
-              <View style={[styles.actionInner, { backgroundColor: theme.allow }]}>
+              <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
                 <Text style={styles.actionText}>Pair</Text>
               </View>
             </PressableScale>
@@ -1135,6 +1160,7 @@ export function SessionCard({
   const request = requests[0]
   const isQuestion = request?.kind === "question"
   const isClassicOS = theme.skin === "classic-os"
+  const isTerminal = theme.skin === "terminal"
   const border = request ? (isQuestion ? theme.questionBorder : theme.permissionBorder) : theme.cardBorder
   const glow = request ? (isQuestion ? theme.questionGlow : theme.permissionGlow) : undefined
   const bgGradient = isQuestion ? theme.questionBgGradient : theme.permissionBgGradient
@@ -1144,9 +1170,9 @@ export function SessionCard({
       colors={border}
       glow={glow}
       pulse={Boolean(request)}
-      shimmer={Boolean(request)}
-      animatedBorder={Boolean(request)}
-      radius={theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
+      shimmer={Boolean(request) && !isTerminal}
+      animatedBorder={Boolean(request) && !isTerminal}
+      radius={isTerminal ? 0 : theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
       nerv={theme.skin === "evangelion"}
       rail={theme.skin === "starwars"}
       innerStyle={{ backgroundColor: theme.surface }}
@@ -1211,7 +1237,7 @@ export function SessionCard({
               size={40}
               animated
             />
-            <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={9} pulse={session.phase === "running"} />
+            <GlowDot color={phaseColor(theme, session.phase)} size={9} pulse={session.phase === "running"} glyph={theme.skin === "terminal"} />
             {onCollapse ? (
               <PressableScale onPress={onCollapse} style={styles.titleGrow} accessibilityLabel="Collapse session">
                 <Text style={styles.sessionTitle} numberOfLines={1}>
@@ -1351,43 +1377,44 @@ export function CompactSessionCard({
   const attention = request?.kind === "question" ? "question" : request ? "permission" : null
   const colors = attention === "question" ? theme.questionBorder : attention === "permission" ? theme.permissionBorder : theme.cardBorder
   const glow = attention === "question" ? theme.questionGlow : attention === "permission" ? theme.permissionGlow : undefined
+  const isTerminal = theme.skin === "terminal"
   return (
     <PressableScale onPress={onOpen} accessibilityLabel={`${name}, ${session.phase}`} style={styles.titleGrow}>
       <GradientSurface
         colors={colors}
         glow={glow}
         pulse={Boolean(attention)}
-        shimmer={Boolean(attention)}
-        animatedBorder={Boolean(attention)}
-        radius={theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
+        shimmer={Boolean(attention) && !isTerminal}
+        animatedBorder={Boolean(attention) && !isTerminal}
+        radius={isTerminal ? 0 : theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18}
         nerv={theme.skin === "evangelion"}
         rail={theme.skin === "starwars"}
         style={styles.titleGrow}
         innerStyle={{ backgroundColor: theme.surface, flex: 1 }}
       >
         <View style={styles.compactCard}>
-          <View style={styles.compactHeaderRow}>
+          <Text style={styles.compactTitle} numberOfLines={1}>
+            {name}
+          </Text>
+          <View style={styles.compactCardRow}>
             <AgentAvatar
               agent={session.agent}
               sessionId={session.id}
               phase={session.phase}
               currentTool={session.currentTool}
               theme={theme}
-              size={28}
+              size={48}
+              animated
             />
-            <GlowDot color={PHASE_COLORS[session.phase] ?? theme.textMuted} size={8} pulse={session.phase === "running"} />
+            <View style={styles.compactCardBody}>
+              <Text style={styles.compactPhase}>{session.phase}</Text>
+              {activity ? (
+                <Text style={styles.compactMeta} numberOfLines={1}>
+                  {activity}
+                </Text>
+              ) : null}
+            </View>
           </View>
-          <Text style={styles.compactTitle} numberOfLines={2}>
-            {name}
-          </Text>
-          <View style={styles.compactPhaseRow}>
-            <Text style={styles.compactPhase}>{session.phase}</Text>
-          </View>
-          {activity ? (
-            <Text style={styles.compactMeta} numberOfLines={1}>
-              {activity}
-            </Text>
-          ) : null}
         </View>
       </GradientSurface>
     </PressableScale>
@@ -1412,12 +1439,16 @@ export function NeedsAttentionCard({
   const glow = isQuestion ? theme.questionGlow : theme.permissionGlow
   const bgGradient = isQuestion ? theme.questionBgGradient : theme.permissionBgGradient
   const text = isQuestion ? theme.questionText : theme.permissionText
+  const isTerminal = theme.skin === "terminal"
   return (
-    <GradientSurface colors={border} glow={glow} pulse shimmer animatedBorder radius={theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18} nerv={theme.skin === "evangelion"} rail={theme.skin === "starwars"} innerStyle={{ backgroundColor: theme.surface }}>
+    <GradientSurface colors={border} glow={glow} pulse shimmer={!isTerminal} animatedBorder={!isTerminal} radius={isTerminal ? 0 : theme.skin === "tunes" ? 0 : theme.skin === "classic-os" ? 10 : 18} nerv={theme.skin === "evangelion"} rail={theme.skin === "starwars"} innerStyle={{ backgroundColor: theme.surface }}>
       <View style={styles.cardPad}>
         <View style={[styles.inlineGlow, { marginTop: 0, shadowColor: glow }]}>
           <LinearGradient colors={bgGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inlineGradient}>
-            <Text style={[styles.cardTitle, { color: text }]}>{request.title}</Text>
+            <View style={styles.termTitleRow}>
+              {isTerminal ? <Text style={[styles.termMarker, { color: isQuestion ? theme.questionBorder[0] : theme.permissionBorder[0] }]}>{isQuestion ? "[?]" : "[!]"}</Text> : null}
+              <Text style={[styles.cardTitle, { color: text }]}>{request.title}</Text>
+            </View>
             {request.summary ? (
               <ExpandableText text={request.summary} style={[styles.cardBody, { color: text }]} styles={styles} numberOfLines={4} threshold={120} />
             ) : null}
@@ -1434,6 +1465,7 @@ export function PreviewScreen({ onClose, theme, styles, resolve }: { onClose: ()
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
+        <ScreenBackdrop theme={theme} />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.headerRow}>
             <Text style={styles.title}>Card preview</Text>
@@ -1539,13 +1571,13 @@ export function PreviewScreen({ onClose, theme, styles, resolve }: { onClose: ()
           <Text style={styles.section}>Controls</Text>
           <GradientButton label="Primary action" onPress={() => {}} styles={styles} colors={theme.accentGradient} />
           <View style={styles.actions}>
-            <View style={[styles.actionInner, { backgroundColor: theme.allow }]}>
+            <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.allow) }]}>
               <Text style={styles.actionText}>Allow</Text>
             </View>
-            <View style={[styles.actionInner, { backgroundColor: theme.deny }]}>
+            <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.deny) }]}>
               <Text style={styles.actionText}>Deny</Text>
             </View>
-            <View style={[styles.actionInner, { backgroundColor: theme.option }]}>
+            <View style={[styles.actionInner, { backgroundColor: actionFill(theme, theme.option) }]}>
               <Text style={styles.actionText}>Option</Text>
             </View>
           </View>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { AccessibilityInfo, Animated, Dimensions, Easing, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native"
 import { LinearGradient } from "expo-linear-gradient"
+import { MONO_FONT } from "./terminalArt"
 
 /** Respect the system reduced-motion setting. */
 export function useReducedMotion(): boolean {
@@ -414,8 +415,8 @@ export function GlowIconButton({
   )
 }
 
-/** A small dot that breathes; static under reduced motion. */
-export function GlowDot({ color, size = 10, pulse = false }: { color: string; size?: number; pulse?: boolean }) {  const reduce = useReducedMotion()
+/** A small dot that breathes; static under reduced motion. `glyph` draws it as a monospace mark (Terminal skin). */
+export function GlowDot({ color, size = 10, pulse = false, glyph = false }: { color: string; size?: number; pulse?: boolean; glyph?: boolean }) {  const reduce = useReducedMotion()
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
     if (!pulse || reduce) return
@@ -428,6 +429,24 @@ export function GlowDot({ color, size = 10, pulse = false }: { color: string; si
     loop.start()
     return () => loop.stop()
   }, [pulse, reduce, opacity])
+
+  if (glyph) {
+    return (
+      <Animated.Text
+        style={{
+          color,
+          opacity,
+          fontFamily: MONO_FONT,
+          fontSize: Math.round(size * 1.4),
+          lineHeight: Math.round(size * 1.5),
+          width: Math.round(size * 1.2),
+          textAlign: "center",
+        }}
+      >
+        {pulse ? "●" : "○"}
+      </Animated.Text>
+    )
+  }
 
   return (
     <Animated.View

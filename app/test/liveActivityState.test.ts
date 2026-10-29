@@ -74,6 +74,19 @@ test("tunes and classic os use their own Live Activity marks", () => {
   assert.equal(activityLabel(resolveTheme("wizard", "gryffindor")), "GRYFFINDOR")
 })
 
+test("the terminal activity reads as a prompt with bracketed status", () => {
+  const terminal = resolveTheme("terminal", "dark")
+  assert.equal(activityMark(terminal), "mark-terminal")
+  assert.equal(activityLabel(terminal), "TERMINAL")
+  const clear = { total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }
+  const waiting = { total: 1, running: 0, waitingApproval: 1, waitingAnswer: 0, stopped: 0 }
+  const idle = { total: 0, running: 0, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }
+  assert.equal(activityStatus(terminal, clear), "[ ready ]")
+  assert.equal(activityStatus(terminal, waiting), "[ needs you ]")
+  assert.equal(activityStatus(terminal, idle), "[ idle ]")
+  assert.equal(activityState(clear, terminal).subtitle, "# TERMINAL · [ ready ]\n1 working")
+})
+
 test("themed label and status lead the subtitle", () => {
   const force = resolveTheme("starwars", "jedi")
   const state = activityState({ total: 1, running: 1, waitingApproval: 0, waitingAnswer: 0, stopped: 0 }, force)

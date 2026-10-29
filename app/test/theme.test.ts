@@ -16,7 +16,7 @@ import {
 } from "../src/theme"
 
 test("the catalog exposes the skins", () => {
-  assert.deepEqual(SKINS.map((skin) => skin.id), ["default", "evangelion", "sanrio", "starwars", "tunes", "classic-os", "wizard"])
+  assert.deepEqual(SKINS.map((skin) => skin.id), ["default", "evangelion", "sanrio", "starwars", "tunes", "classic-os", "wizard", "terminal"])
   assert.deepEqual(skinDef("default").options.map((option) => option.id), ["light", "dark", "system"])
   assert.deepEqual(skinDef("evangelion").options.map((option) => option.id), ["unit00", "unit01", "unit02"])
   assert.deepEqual(skinDef("sanrio").options.map((option) => option.id), ["kitty", "chococat", "system"])
@@ -24,6 +24,7 @@ test("the catalog exposes the skins", () => {
   assert.deepEqual(skinDef("tunes").options.map((option) => option.id), ["classic", "bento", "system"])
   assert.deepEqual(skinDef("classic-os").options.map((option) => option.id), ["blue", "dark", "system"])
   assert.deepEqual(skinDef("wizard").options.map((option) => option.id), ["gryffindor", "slytherin", "ravenclaw", "hufflepuff"])
+  assert.deepEqual(skinDef("terminal").options.map((option) => option.id), ["light", "dark", "system"])
 })
 
 test("the wizard theme resolves its houses", () => {
@@ -33,6 +34,54 @@ test("the wizard theme resolves its houses", () => {
   assert.equal(resolveTheme("wizard", "hufflepuff").variant, "hufflepuff")
   // No System option: an unknown option falls back to the default.
   assert.equal(resolveTheme("wizard", "system").variant, "gryffindor")
+})
+
+test("the terminal skin resolves its two looks and system", () => {
+  assert.equal(resolveTheme("terminal", "light").variant, "light")
+  assert.equal(resolveTheme("terminal", "dark").variant, "dark")
+  assert.equal(resolveTheme("terminal", "system", "dark").variant, "dark")
+  assert.equal(resolveTheme("terminal", "system", "light").variant, "light")
+  assert.equal(resolveTheme("terminal", "light").dark, false)
+  assert.equal(resolveTheme("terminal", "dark").dark, true)
+  assert.equal(selectThemeOption("terminal"), "system")
+  assert.equal(defaultOptionFor("terminal"), "system")
+})
+
+test("the terminal palette is monochrome except for indicators", () => {
+  const isNeutral = (hex: string) => {
+    const match = /^#([0-9a-f]{6})$/i.exec(hex)
+    assert.ok(match, `expected a hex colour, got ${hex}`)
+    const value = match[1]
+    return value.slice(0, 2).toLowerCase() === value.slice(2, 4).toLowerCase() && value.slice(2, 4).toLowerCase() === value.slice(4, 6).toLowerCase()
+  }
+  for (const variant of ["light", "dark"] as const) {
+    const theme = resolveTheme("terminal", variant)
+    const chrome = [
+      theme.background,
+      theme.surface,
+      theme.border,
+      theme.text,
+      theme.textSecondary,
+      theme.textMuted,
+      theme.accent,
+      theme.secondaryAccent,
+      theme.badgeBg,
+      theme.badgeText,
+      theme.inputBg,
+      theme.inputBorder,
+      theme.pendingBg,
+      theme.pendingTitle,
+      theme.pendingBody,
+      theme.questionText,
+      theme.permissionText,
+    ]
+    for (const colour of chrome) assert.equal(isNeutral(colour), true, `${variant}: ${colour} should be neutral`)
+    const indicators = [theme.allow, theme.deny, theme.error, theme.pendingBorder, theme.questionBorder[0], theme.permissionBorder[0]]
+    for (const colour of indicators) {
+      assert.equal(isNeutral(colour), false, `${variant}: ${colour} should be an indicator colour`)
+      assert.notEqual(colour.toLowerCase(), theme.text.toLowerCase(), `${variant}: ${colour} should differ from the ink tone`)
+    }
+  }
 })
 
 test("switching a theme builds the pair for the selected skin", () => {
@@ -49,6 +98,13 @@ test("switching a theme builds the pair for the selected skin", () => {
   assert.equal(wizard.skin, "wizard")
   assert.equal(wizard.option, "slytherin")
   assert.equal(resolveTheme(wizard.skin, wizard.option, "dark").skin, "wizard")
+
+  // Terminal has a System option: switching selects it, and relaunch resolves it.
+  const terminal = themeSelection("terminal", "dark")
+  assert.equal(terminal.skin, "terminal")
+  assert.equal(terminal.option, "system")
+  assert.equal(resolveTheme(terminal.skin, terminal.option, "dark").variant, "dark")
+  assert.equal(resolveTheme(terminal.skin, terminal.option, "light").variant, "light")
 })
 
 test("the tunes and classic os variants resolve to their palettes", () => {
@@ -125,6 +181,7 @@ test("isSkinId accepts only known skins", () => {
   assert.equal(isSkinId("tunes"), true)
   assert.equal(isSkinId("classic-os"), true)
   assert.equal(isSkinId("wizard"), true)
+  assert.equal(isSkinId("terminal"), true)
   assert.equal(isSkinId("unit01"), false)
 })
 
@@ -144,6 +201,7 @@ test("theme names are renamed and de-trademarked", () => {
   assert.equal(skinDef("tunes").name, "Tunes")
   assert.equal(skinDef("classic-os").name, "Classic OS")
   assert.equal(skinDef("wizard").name, "Wizard")
+  assert.equal(skinDef("terminal").name, "Terminal")
   const banned = /evangelion|hello kitty|chococat|sanrio|star wars|sith|jedi|winamp|windows|luna|bento|harry|potter|gryffindor|slytherin|ravenclaw|hufflepuff|hogwarts/i
   for (const skin of SKINS) {
     assert.doesNotMatch(skin.name, banned, `${skin.id} name`)

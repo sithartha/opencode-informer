@@ -3,6 +3,8 @@ import { Linking, View } from "react-native"
 import { BrandMark, CompactHero, CompactSessionCard, ConfirmModal, GradientButton, HeroCard, LinkText, ManualConnectModal, MultiQuestionForm, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SessionGrid, SessionsLayoutToggle, SwitcherModal } from "../src/components"
 import { DemoScreen } from "../src/DemoScreen"
 import { ThemeMark } from "../src/themeMark"
+import { ScreenBackdrop, TERMINAL_OI_ART } from "../src/terminalArt"
+import { GlowDot } from "../src/ui"
 import { createStyles } from "../src/styles"
 import { resolveTheme } from "../src/theme"
 import type { PendingRequest, Session } from "../src/events"
@@ -10,6 +12,8 @@ import { avatarColor } from "../src/avatar"
 
 const lightTheme = resolveTheme("default", "light")
 const darkTheme = resolveTheme("default", "dark")
+const terminalLight = resolveTheme("terminal", "light")
+const terminalDark = resolveTheme("terminal", "dark")
 const styles = createStyles(lightTheme)
 
 function session(overrides: Partial<Session> = {}): Session {
@@ -619,15 +623,22 @@ describe("agent avatars on session cards", () => {
     expect((await avatarFor({ phase: "ended", currentTool: null })).getByTestId("agent-avatar:inactive", { includeHiddenElements: true })).toBeTruthy()
   })
 
-  it("draws every avatar as a circle", async () => {
+  it("draws avatars round in rounded themes and square in square themes", async () => {
     const label = (await avatarFor({ id: "s1", agent: "opencode" })).getByTestId("agent-avatar:thinking", { includeHiddenElements: true }).props.accessibilityLabel as string
     expect(label).toContain(" circle ")
+
+    const terminal = resolveTheme("terminal", "light")
+    const { getByTestId } = await render(
+      <SessionCard session={session({ id: "s1", agent: "opencode" })} requests={[]} resolve={jest.fn()} theme={terminal} styles={createStyles(terminal)} />,
+    )
+    const square = getByTestId("agent-avatar:thinking", { includeHiddenElements: true }).props.accessibilityLabel as string
+    expect(square).toContain(" square ")
   })
 
-  it("draws the avatar in the active theme's colours", async () => {
+  it("draws the avatar in the session mode's colour", async () => {
     const { getByTestId } = await avatarFor({ id: "s1", agent: "opencode" })
     const label = getByTestId("agent-avatar:thinking", { includeHiddenElements: true }).props.accessibilityLabel as string
-    expect(label).toContain(avatarColor(lightTheme))
+    expect(label).toContain(avatarColor(lightTheme, "running"))
   })
 
   it("draws the same look under the classic OS skin", async () => {
@@ -694,6 +705,17 @@ describe("session layout controls", () => {
     expect(onOpen).toHaveBeenCalled()
   })
 
+  it("puts a larger animated avatar on the left and drops the status dot", async () => {
+    const { getByTestId, queryByText } = await render(
+      <CompactSessionCard session={session()} theme={lightTheme} styles={styles} onOpen={jest.fn()} />,
+    )
+    const avatar = getByTestId("agent-avatar:thinking", { includeHiddenElements: true })
+    expect(avatar.props.accessibilityLabel).toContain(" animated")
+    expect(avatar.props.style.width).toBe(48)
+    expect(queryByText("●")).toBeNull()
+    expect(queryByText("○")).toBeNull()
+  })
+
   it("keeps a pending session compact and highlighted through its avatar", async () => {
     const { getByText, getByTestId } = await render(
       <CompactSessionCard
@@ -740,5 +762,109 @@ describe("session layout controls", () => {
       />,
     )
     expect(pending.queryByLabelText("Collapse session")).toBeNull()
+  })
+})
+
+function collectStyles(node: unknown, found: Array<Record<string, unknown>> = []): Array<Record<string, unknown>> {
+  if (!node || typeof node !== "object") return found
+  if (Array.isArray(node)) {
+    for (const child of node) collectStyles(child, found)
+    return found
+  }
+  const element = node as { props?: { style?: unknown }; children?: unknown }
+  const style = element.props?.style
+  if (style) {
+    const merged = Array.isArray(style) ? Object.assign({}, ...style.flat().filter((entry) => entry && typeof entry === "object")) : style
+    if (merged && typeof merged === "object") found.push(merged as Record<string, unknown>)
+  }
+  if (element.children) collectStyles(element.children, found)
+  return found
+}
+
+describe("Terminal theme", () => {
+  it("flattens corners, shadows and typography", () => {
+    const terminalStyles = createStyles(terminalDark) as unknown as Record<string, Record<string, unknown>>
+    let radii = 0
+    for (const style of Object.values(terminalStyles)) {
+      if (!style || typeof style !== "object") continue
+      if ("borderRadius" in style) {
+        radii += 1
+        expect(style.borderRadius).toBe(0)
+      }
+      if ("shadowOpacity" in style) expect(style.shadowOpacity).toBe(0)
+      if ("fontSize" in style) expect(style.fontFamily).toBeTruthy()
+    }
+    expect(radii).toBeGreaterThan(10)
+  })
+
+  it("shows bash chrome on the hero", async () => {
+    const { getByText } = await render(
+      <HeroCard agg={{ total: 3, running: 2, waitingApproval: 1, waitingAnswer: 0, stopped: 1 }} theme={terminalLight} styles={createStyles(terminalLight)} />,
+    )
+    expect(getByText("+-- open-island --+")).toBeTruthy()
+    expect(getByText("$ status --needs-you")).toBeTruthy()
+    expect(getByText("[ needs you ]")).toBeTruthy()
+    expect(getByText("1")).toBeTruthy()
+    expect(getByText("agent needs you")).toBeTruthy()
+    expect(getByText("2 working")).toBeTruthy()
+  })
+
+  it("uses the ASCII mark and watermark", async () => {
+    const header = await render(<ThemeMark theme={terminalLight} size={30} />)
+    expect(header.getByText(">_")).toBeTruthy()
+    const hero = await render(<ThemeMark theme={terminalDark} size={168} />)
+    expect(hero.getByText(TERMINAL_OI_ART.join("\n"))).toBeTruthy()
+  })
+
+  it("only draws the backdrop for the terminal skin", async () => {
+    const defaultScreen = await render(<ScreenBackdrop theme={lightTheme} />)
+    expect(defaultScreen.queryByText(/\./)).toBeNull()
+    const terminalScreen = await render(<ScreenBackdrop theme={terminalLight} />)
+    expect(terminalScreen.getByText(/\./)).toBeTruthy()
+  })
+
+  it("marks attention cards with bracketed prompts", async () => {
+    const permission = await render(
+      <NeedsAttentionCard
+        request={{ requestID: "p1", sessionID: "s1", kind: "permission", title: "Allow Bash" }}
+        resolve={jest.fn()}
+        theme={terminalLight}
+        styles={createStyles(terminalLight)}
+      />,
+    )
+    expect(permission.getByText("[!]")).toBeTruthy()
+    expect(permission.getByText("Allow Bash")).toBeTruthy()
+    const question = await render(
+      <NeedsAttentionCard
+        request={{ requestID: "q1", sessionID: "s1", kind: "question", title: "Which database?", options: [{ label: "SQLite" }] }}
+        resolve={jest.fn()}
+        theme={terminalLight}
+        styles={createStyles(terminalLight)}
+      />,
+    )
+    expect(question.getByText("[?]")).toBeTruthy()
+  })
+
+  it("draws status indicators as glyphs", async () => {
+    const active = await render(<GlowDot color={terminalLight.allow} glyph pulse />)
+    expect(active.getByText("●")).toBeTruthy()
+    const idle = await render(<GlowDot color={terminalLight.textMuted} glyph />)
+    expect(idle.getByText("○")).toBeTruthy()
+  })
+
+  it("keeps permission actions monochrome", async () => {
+    const theme = terminalLight
+    const { toJSON } = await render(
+      <NeedsAttentionCard
+        request={{ requestID: "p1", sessionID: "s1", kind: "permission", title: "Allow Bash" }}
+        resolve={jest.fn()}
+        theme={theme}
+        styles={createStyles(theme)}
+      />,
+    )
+    const backgrounds = collectStyles(toJSON()).map((style) => style.backgroundColor).filter(Boolean)
+    expect(backgrounds).not.toContain(theme.allow)
+    expect(backgrounds).not.toContain(theme.deny)
+    expect(backgrounds).toContain(theme.text)
   })
 })

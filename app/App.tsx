@@ -12,6 +12,7 @@ import { liveActivity } from "./src/liveActivity"
 import { joinHostPort } from "./src/manualConnect"
 import { CompactHero, CompactSessionCard, ConfirmModal, GradientButton, HeroCard, ManualConnectModal, NeedsAttentionCard, PairingCodeModal, PreviewScreen, SessionCard, SessionGrid, SessionsLayoutToggle, SwitcherModal } from "./src/components"
 import { ThemeMark } from "./src/themeMark"
+import { ScreenBackdrop } from "./src/terminalArt"
 import { DemoScreen } from "./src/DemoScreen"
 import { Ionicons } from "@expo/vector-icons"
 import { TIP_IDS, TipStore } from "./src/purchases"
@@ -200,7 +201,13 @@ export default function App() {
   )
 
   const statusColor =
-    connection.status === "connected" ? theme.allow : connection.status === "disconnected" ? theme.deny : theme.accent
+    connection.status === "connected"
+      ? theme.allow
+      : connection.status === "disconnected"
+        ? theme.deny
+        : theme.skin === "terminal"
+          ? theme.pendingBorder
+          : theme.accent
 
   const tipStore = useRef(new TipStore(createIapAdapter())).current
   useEffect(() => {
@@ -236,6 +243,7 @@ export default function App() {
   return (
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
       <StatusBar style={theme.dark ? "light" : "dark"} />
+      <ScreenBackdrop theme={theme} />
       <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScroll={(event) => { const y = event.nativeEvent.contentOffset.y; offsetRef.current = y; heroScrollY.setValue(y) }} scrollEventThrottle={16}>
         <View style={styles.headerRow}>
@@ -250,7 +258,7 @@ export default function App() {
 
         <PressableScale onPress={paired ? () => setConfirmDisconnect(true) : undefined} accessibilityLabel="Connection">
           <View style={styles.statusPill}>
-            <GlowDot color={statusColor} size={8} pulse={connection.status === "connecting" || connection.status === "discovering"} />
+            <GlowDot color={statusColor} size={8} pulse={connection.status === "connecting" || connection.status === "discovering"} glyph={theme.skin === "terminal"} />
             <Text style={styles.statusText}>
               {connection.status}
               {connection.macName ? ` · ${connection.macName}` : ""}
@@ -366,6 +374,7 @@ export default function App() {
 
       <Modal visible={showSettings} animationType="slide" onRequestClose={() => setShowSettings(false)}>
         <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
+          <ScreenBackdrop theme={theme} />
           <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.headerRow}>
@@ -417,7 +426,7 @@ export default function App() {
                             <View style={[previewStyles.themePreviewAccent, { backgroundColor: preview.accent }]} />
                           </View>
                         </LinearGradient>
-                        {selected ? <Text style={styles.switcherCheck}>✓</Text> : null}
+                        {selected ? <Text style={styles.switcherCheck}>{skin === "terminal" ? ">" : "✓"}</Text> : null}
                       </View>
                     </TouchableOpacity>
                   )
@@ -450,7 +459,9 @@ export default function App() {
                   ? "Classic media player chrome — a dark stock look or the light recolor."
                   : skin === "classic-os"
                     ? "Classic desktop interface — the blue look or a dark counterpart."
-                    : "Light, Dark, or follow your iPhone's setting."}
+                    : skin === "terminal"
+                      ? "Bash shell interface — monochrome with colored indicators."
+                      : "Light, Dark, or follow your iPhone's setting."}
             </Text>
 
             <Text style={styles.section}>Support development</Text>
@@ -471,7 +482,7 @@ export default function App() {
                     accessibilityLabel={`Buy tip ${tip.price}`}
                     style={[styles.tipBuyBtn, tip.recommended ? styles.tipBuyBtnFilled : null]}
                   >
-                    <Text style={[styles.tipCardPrice, tip.recommended ? { color: "#ffffff" } : null]}>{tip.price}</Text>
+                    <Text style={[styles.tipCardPrice, tip.recommended ? { color: theme.skin === "terminal" ? theme.background : "#ffffff" } : null]}>{tip.price}</Text>
                   </Pressable>
                 </View>
               ))}

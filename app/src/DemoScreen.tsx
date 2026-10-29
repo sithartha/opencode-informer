@@ -7,6 +7,7 @@ import type { StreamEventType } from "./contract"
 import type { Theme } from "./theme"
 import type { Styles } from "./styles"
 import { GradientButton, HeroCard, SessionCard, SwitcherModal } from "./components"
+import { ScreenBackdrop } from "./terminalArt"
 import type { Session } from "./events"
 import { FadeIn } from "./ui"
 
@@ -148,6 +149,7 @@ export function DemoScreen({
 
   return (
     <LinearGradient colors={theme.bgGradient} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
+      <ScreenBackdrop theme={theme} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Demo</Text>

@@ -1,4 +1,4 @@
-export type SkinId = "default" | "evangelion" | "sanrio" | "starwars" | "tunes" | "classic-os" | "wizard"
+export type SkinId = "default" | "evangelion" | "sanrio" | "starwars" | "tunes" | "classic-os" | "wizard" | "terminal"
 export type DefaultMode = "light" | "dark" | "system"
 export type UnitId = "unit00" | "unit01" | "unit02"
 export type SanrioId = "kitty" | "chococat"
@@ -6,7 +6,8 @@ export type StarWarsId = "sith" | "jedi"
 export type TunesId = "classic" | "bento"
 export type ClassicOSId = "blue" | "dark"
 export type WizardId = "gryffindor" | "slytherin" | "ravenclaw" | "hufflepuff"
-export type ThemeOption = DefaultMode | UnitId | SanrioId | StarWarsId | TunesId | ClassicOSId | WizardId
+export type TerminalId = "light" | "dark" | "system"
+export type ThemeOption = DefaultMode | UnitId | SanrioId | StarWarsId | TunesId | ClassicOSId | WizardId | TerminalId
 
 export interface Theme {
   skin: SkinId
@@ -743,6 +744,88 @@ const hufflepuff: Theme = {
   permissionText: "#4a3f2a",
 }
 
+// --- Terminal skin: a bash shell / TUI in near-monochrome, with color only for indicators ---
+
+const terminalLight: Theme = {
+  skin: "terminal",
+  variant: "light",
+  dark: false,
+  background: "#f7f7f7",
+  surface: "#ffffff",
+  border: "#0b0b0b",
+  text: "#0b0b0b",
+  textSecondary: "#3d3d3d",
+  textMuted: "#6b6b6b",
+  accent: "#0b0b0b",
+  secondaryAccent: "#5c5c5c",
+  allow: "#0a7d32",
+  deny: "#b3261e",
+  option: "#0b0b0b",
+  pendingBg: "#ffffff",
+  pendingBorder: "#b7791f",
+  pendingTitle: "#0b0b0b",
+  pendingBody: "#3d3d3d",
+  badgeBg: "#ededed",
+  badgeText: "#0b0b0b",
+  inputBg: "#ffffff",
+  inputBorder: "#0b0b0b",
+  error: "#b3261e",
+  shadow: "transparent",
+  scrim: "rgba(11,11,11,0.55)",
+  bgGradient: ["#f7f7f7", "#f7f7f7"],
+  cardBorder: ["#0b0b0b", "#0b0b0b"],
+  accentGradient: ["#0b0b0b", "#0b0b0b"],
+  glow: "transparent",
+  questionBorder: ["#0b6b8a", "#0b6b8a"],
+  questionGlow: "transparent",
+  questionBgGradient: ["#ffffff", "#ffffff"],
+  questionText: "#0b0b0b",
+  permissionBorder: ["#b7791f", "#b7791f"],
+  permissionGlow: "transparent",
+  permissionBgGradient: ["#ffffff", "#ffffff"],
+  permissionText: "#0b0b0b",
+}
+
+const terminalDark: Theme = {
+  skin: "terminal",
+  variant: "dark",
+  dark: true,
+  background: "#0b0b0b",
+  surface: "#111111",
+  border: "#f5f5f5",
+  text: "#f5f5f5",
+  textSecondary: "#c9c9c9",
+  textMuted: "#9a9a9a",
+  accent: "#f5f5f5",
+  secondaryAccent: "#b0b0b0",
+  allow: "#51cf66",
+  deny: "#ff6b6b",
+  option: "#f5f5f5",
+  pendingBg: "#111111",
+  pendingBorder: "#e5c07b",
+  pendingTitle: "#f5f5f5",
+  pendingBody: "#c9c9c9",
+  badgeBg: "#1a1a1a",
+  badgeText: "#f5f5f5",
+  inputBg: "#111111",
+  inputBorder: "#f5f5f5",
+  error: "#ff6b6b",
+  shadow: "transparent",
+  scrim: "rgba(0,0,0,0.65)",
+  bgGradient: ["#0b0b0b", "#0b0b0b"],
+  cardBorder: ["#f5f5f5", "#f5f5f5"],
+  accentGradient: ["#f5f5f5", "#f5f5f5"],
+  glow: "transparent",
+  questionBorder: ["#56b6c2", "#56b6c2"],
+  questionGlow: "transparent",
+  questionBgGradient: ["#111111", "#111111"],
+  questionText: "#f5f5f5",
+  permissionBorder: ["#e5c07b", "#e5c07b"],
+  permissionGlow: "transparent",
+  permissionBgGradient: ["#111111", "#111111"],
+  permissionText: "#f5f5f5",
+}
+
 export interface SkinDef {
   id: SkinId
   name: string
@@ -844,13 +927,26 @@ export const SKINS: SkinDef[] = [
     resolve: (option) =>
       option === "gryffindor" ? gryffindor : option === "slytherin" ? slytherin : option === "hufflepuff" ? hufflepuff : ravenclaw,
   },
+  {
+    id: "terminal",
+    name: "Terminal",
+    description: "Bash shell · Light, Dark, System",
+    options: [
+      { id: "light", name: "Light" },
+      { id: "dark", name: "Dark" },
+      { id: "system", name: "System" },
+    ],
+    defaultOption: "system",
+    resolve: (option, systemScheme) =>
+      option === "light" ? terminalLight : option === "dark" ? terminalDark : systemScheme === "dark" ? terminalDark : terminalLight,
+  },
 ]
 
 export const DEFAULT_SKIN: SkinId = "default"
 export const DEFAULT_OPTION: ThemeOption = "system"
 
 export function isSkinId(value: unknown): value is SkinId {
-  return value === "default" || value === "evangelion" || value === "sanrio" || value === "starwars" || value === "tunes" || value === "classic-os" || value === "wizard"
+  return value === "default" || value === "evangelion" || value === "sanrio" || value === "starwars" || value === "tunes" || value === "classic-os" || value === "wizard" || value === "terminal"
 }
 
 export function skinDef(id: SkinId): SkinDef {

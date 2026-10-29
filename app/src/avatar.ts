@@ -42,21 +42,40 @@ export function avatarMood(phase: string, currentTool?: string | null): AvatarMo
 }
 
 /**
- * Every avatar is a circle. The face is still unique per session: the light seed and
- * the theme colour are derived from the session id, so sessions do not look alike
- * while sharing one silhouette.
+ * Every avatar shares its theme's corner language: a square silhouette in
+ * square-cornered themes (Nerv, Tunes, Terminal) and a circle everywhere else.
  */
-export function avatarIdentity(agent?: string | null, sessionId?: string | null): AvatarIdentity {
+export function avatarCut(theme: Theme): Cut {
+  return theme.skin === "evangelion" || theme.skin === "tunes" || theme.skin === "terminal" ? "square" : "circle"
+}
+
+/**
+ * The avatar's face is unique per session: the light seed and the theme colour are
+ * derived from the session id, so sessions do not look alike while sharing one silhouette.
+ */
+export function avatarIdentity(agent?: string | null, sessionId?: string | null, cut: Cut = "circle"): AvatarIdentity {
   const key = (sessionId && sessionId.trim()) || (agent && agent.trim()) || "agent"
   const seed: Seed = [
     (hash(`${key}:angle`) / 0xffffffff) * TAU,
     (hash(`${key}:drift`) / 0xffffffff) * TAU,
     (hash(`${key}:orbit`) / 0xffffffff) * TAU,
   ]
-  return { cut: "circle", seed }
+  return { cut, seed }
 }
 
-/** The face always takes the active theme's accent, so it belongs to the interface. */
-export function avatarColor(theme: Theme): string {
-  return theme.accent
+/** The face takes the session's mode colour: working green, permission amber, question blue, settled neutral. */
+export function avatarColor(theme: Theme, phase?: string | null): string {
+  switch (phase) {
+    case "running":
+      return theme.allow
+    case "waiting-permission":
+      return theme.permissionBorder[0]
+    case "waiting-answer":
+      return theme.questionBorder[0]
+    case "completed":
+    case "ended":
+      return theme.textMuted
+    default:
+      return theme.accent
+  }
 }
