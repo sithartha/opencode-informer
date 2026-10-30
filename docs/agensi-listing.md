@@ -52,7 +52,11 @@ Safety:
 • Asks before overwriting an existing installation or running sudo
 • Documents the known limits: 7-day signature expiry for a free Apple ID, unsigned Linux/Windows helper binaries, and LAN-only fallback
 
-Links: repository and latest release are listed on this page. Full setup and troubleshooting documents ship inside the skill.
+Links:
+• Repository: https://github.com/sithartha/opencode-informer
+• Latest app release (direct IPA): https://github.com/sithartha/opencode-informer/releases/latest
+
+Full setup and troubleshooting documents ship inside the skill.
 ```
 
 **Category:** Mobile Development
