@@ -36,8 +36,8 @@
 
 ## 6. Publish and verify end to end
 
-- [ ] 6.1 Build and publish `app-v<version>` with the IPA, plugin zip, and `SHA256SUMS`, marked latest; verify the release API reports it as latest and downloaded assets match the published checksums
+- [x] 6.1 Build and publish `app-v<version>` with the IPA, plugin zip, and `SHA256SUMS`, marked latest; verify the release API reports it as latest and downloaded assets match the published checksums
 - [ ] 6.2 Sideload the published IPA on a device with Sideloadly or AltStore, pair it with a Mac running the skill-installed plugin and helper, and confirm live activity plus an approval round trip; set the compatibility row's `Verified` to `yes`
 - [ ] 6.3 Submit the skill zip to Agensi as a free listing, resolve any security-scan findings, and after approval verify the listing is live, free, and links to the repository and latest release; add the listing link to `README.md`
-- [ ] 6.4 Verify the repository's Latest release is still the app release after any helper release, and that the README and docs landing page links resolve to it
+- [x] 6.4 Verify the repository's Latest release is still the app release after any helper release, and that the README and docs landing page links resolve to it
 - [x] 6.5 Run `openspec validate --strict`, `cd plugin && npm test`, `cd contract && node --test`, and `cd app && npm test`; verify all pass with no change to existing behavior
