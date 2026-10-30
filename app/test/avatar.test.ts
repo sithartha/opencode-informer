@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import type { Theme } from "../src/theme"
+import type { Cut } from "moodstone"
+import type { SkinId, Theme } from "../src/theme"
 import { avatarColor, avatarCut, avatarIdentity, avatarMood } from "../src/avatar"
 
 const theme = {
@@ -38,13 +39,27 @@ test("every avatar defaults to a circle", () => {
 })
 
 test("the theme's corner style picks the avatar silhouette", () => {
-  assert.equal(avatarCut(theme), "circle")
-  for (const skin of ["default", "sanrio", "starwars", "classic-os", "wizard"] as const) {
-    assert.equal(avatarCut({ ...theme, skin } as Theme), "circle", skin)
+  const cuts: Record<SkinId, Cut> = {
+    default: "circle",
+    evangelion: "hexagon",
+    sanrio: "circle",
+    starwars: "squircle",
+    tunes: "square",
+    "classic-os": "squircle",
+    wizard: "circle",
+    terminal: "square",
   }
-  for (const skin of ["evangelion", "tunes", "terminal"] as const) {
-    assert.equal(avatarCut({ ...theme, skin } as Theme), "square", skin)
+  for (const skin of Object.keys(cuts) as SkinId[]) {
+    assert.equal(avatarCut({ ...theme, skin } as Theme), cuts[skin], skin)
   }
+})
+
+test("changing only the skin changes the silhouette, not the face", () => {
+  const cat = avatarIdentity("opencode", "s1", avatarCut({ ...theme, skin: "sanrio" } as Theme))
+  const nerv = avatarIdentity("opencode", "s1", avatarCut({ ...theme, skin: "evangelion" } as Theme))
+  assert.equal(cat.cut, "circle")
+  assert.equal(nerv.cut, "hexagon")
+  assert.deepEqual(cat.seed, nerv.seed)
 })
 
 test("the same session always gets the same face", () => {

@@ -1,5 +1,5 @@
 import type { Cut, Mood, Seed } from "moodstone"
-import type { Theme } from "./theme"
+import type { SkinId, Theme } from "./theme"
 
 /** The avatar moods the app can ask for. */
 export type AvatarMood = Mood
@@ -42,11 +42,23 @@ export function avatarMood(phase: string, currentTool?: string | null): AvatarMo
 }
 
 /**
- * Every avatar shares its theme's corner language: a square silhouette in
- * square-cornered themes (Nerv, Tunes, Terminal) and a circle everywhere else.
+ * Every avatar wears its skin's shape: the hexagonal Nerv console, the square
+ * corners of Tunes and Terminal, the mild squircle of The Force and Classic OS,
+ * and the full circle of Cat, Default and Wizard.
  */
+const SKIN_CUT: Record<SkinId, Cut> = {
+  default: "circle",
+  evangelion: "hexagon",
+  sanrio: "circle",
+  starwars: "squircle",
+  tunes: "square",
+  "classic-os": "squircle",
+  wizard: "circle",
+  terminal: "square",
+}
+
 export function avatarCut(theme: Theme): Cut {
-  return theme.skin === "evangelion" || theme.skin === "tunes" || theme.skin === "terminal" ? "square" : "circle"
+  return SKIN_CUT[theme.skin] ?? "circle"
 }
 
 /**
