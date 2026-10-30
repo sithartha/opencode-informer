@@ -2,6 +2,23 @@
 
 At https://appstoreconnect.apple.com → **My Apps** → **OpenCode Informer**.
 
+## 0. Direct release (IPA, no App Store)
+
+Do this after the version bump and before the App Store steps, so the newest build is
+downloadable while review is pending. Full commands: `docs/release-ipa.md`.
+
+- Build the unsigned IPA and the plugin zip: `./scripts/release-ipa.sh`.
+- Add the compatibility row for this version to `docs/compatibility.md` (app/build,
+  plugin, both helpers, minimum iOS, verification status).
+- Create the GitHub release `app-v<version>` **marked latest** with:
+  - `OpenCodeInformer-<version>-unsigned.ipa`
+  - `open-island-mobile-plugin-<plugin-version>.zip`
+  - `SHA256SUMS`
+- Verify: release is Latest, `shasum -a 256 -c SHA256SUMS` passes on the downloaded
+  assets, and the install links in `docs/install.md` resolve.
+- Refresh the Agensi skill package if install steps or component versions changed
+  (`./scripts/package-skill.sh`), and re-submit it (see `docs/agensi-listing.md`).
+
 ## 1. Build
 
 - Left sidebar → **App Store** tab → the version **0.1.1** (create it if missing).

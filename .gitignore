@@ -18,6 +18,12 @@ mac-helper/.build/
 *.aab
 DerivedData/
 
+# Local release artifacts (scripts/release-ipa.sh, package-plugin.sh, package-skill.sh)
+app/build/
+dist/ipa/
+dist/plugin/
+dist/agensi/
+
 # Secrets / credentials
 *.p8
 *.p12

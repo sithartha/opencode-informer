@@ -13,6 +13,13 @@ Three pieces, plus a shared contract:
 | `app/` | Expo + React Native phone client: discovery/pairing, live activity, notifications, replies. iOS first, Android where feasible. |
 | `contract/` | The single wire contract shared by all three: endpoints, event names, payload shapes, BLE UUIDs. |
 
+Install it with [the install guide](./docs/install.md). Component versions that work
+together are listed in the [compatibility table](./docs/compatibility.md); the newest
+app build is the [latest release](https://github.com/sithartha/opencode-informer/releases/latest)
+(direct IPA download, no App Store needed).
+
+If the app is useful to you, you can [leave a tip](https://app.lava.top/products/9229b73c-5352-4452-a5b9-79ec43811176).
+
 The design and requirements live in the OpenSpec change
 `openspec/changes/mobile-agent-companion/`.
 
