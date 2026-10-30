@@ -5,7 +5,8 @@ version; the newest row is the current recommendation.
 
 | App / IPA | Build | Min iOS | Plugin | macOS helper | Cross-platform helper | Verified | Notes |
 |---|---|---|---|---|---|---|---|
-| 0.1.2 | 23 | 16.4 | 0.1.0 | 0.4.4 | 0.2.2 | partial | Current release. Built and launched locally; the published IPA has not yet been sideloaded end to end. |
+| 0.1.3 | 24 | 16.4 | 0.1.0 | 0.4.4 | 0.2.2 | partial | Current release. Built locally and launched on an iPhone; the published IPA has not been sideloaded end to end. Adds per-skin avatar silhouettes (hexagon, square, squircle, circle). |
+| 0.1.2 | 23 | 16.4 | 0.1.0 | 0.4.4 | 0.2.2 | partial | Built and launched locally; the published IPA has not yet been sideloaded end to end. |
 | 0.1.1 | unknown (EAS-managed) | 16.4 | 0.1.0 | 0.4.3 | 0.2.0 | no | App Store release. Not re-tested against this install path. |
 
 `Verified` means:
