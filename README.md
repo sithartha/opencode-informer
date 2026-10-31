@@ -18,7 +18,7 @@ together are listed in the [compatibility table](./docs/compatibility.md); the n
 app build is the [latest release](https://github.com/sithartha/opencode-informer/releases/latest)
 (direct IPA download, no App Store needed).
 
-If the app is useful to you, you can [leave a tip](https://app.lava.top/products/9229b73c-5352-4452-a5b9-79ec43811176).
+If the app is useful to you, you can [leave a tip](https://app.lava.top/1679700259?tabId=donate).
 
 The design and requirements live in the OpenSpec change
 `openspec/changes/mobile-agent-companion/`.

@@ -139,7 +139,7 @@ fi
   echo ""
   echo "### Support"
   echo ""
-  echo "If the app is useful to you, you can [leave a tip](https://app.lava.top/products/9229b73c-5352-4452-a5b9-79ec43811176)."
+  echo "If the app is useful to you, you can [leave a tip](https://app.lava.top/1679700259?tabId=donate)."
   echo ""
   echo "### Checksums"
   echo ""

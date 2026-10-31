@@ -6,5 +6,5 @@ your OpenCode sessions to the phone over your own Wi-Fi and Bluetooth, with no s
 - [Install](./install.md)
 - [Compatibility](./compatibility.md) — which app, plugin, and helper versions work together
 - [Latest app release](https://github.com/sithartha/opencode-informer/releases/latest)
-- [Leave a tip](https://app.lava.top/products/9229b73c-5352-4452-a5b9-79ec43811176)
+- [Leave a tip](https://app.lava.top/1679700259?tabId=donate)
 - [Privacy Policy](./privacy-policy.html)
