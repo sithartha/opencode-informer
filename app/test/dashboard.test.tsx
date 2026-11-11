@@ -115,6 +115,22 @@ describe("SessionCard", () => {
     expect(getByText("Running the test suite")).toBeTruthy()
   })
 
+  it("shows the running shell command and its last lines", async () => {
+    const { getByText, getByTestId } = await render(
+      <SessionCard
+        session={session({ currentTool: "shell", shellCommand: "npm test", toolLines: ["PASS a", "PASS b", "Tests: 2 passed"] })}
+        requests={[]}
+        resolve={jest.fn()}
+        theme={lightTheme}
+        styles={styles}
+      />,
+    )
+    expect(getByText("$ npm test")).toBeTruthy()
+    expect(getByTestId("tool-output")).toBeTruthy()
+    expect(getByText("PASS a")).toBeTruthy()
+    expect(getByText("Tests: 2 passed")).toBeTruthy()
+  })
+
   it("shows the latest message and reveals earlier ones", async () => {
     const { getByText, queryByText } = await render(
       <SessionCard
