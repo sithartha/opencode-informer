@@ -21,8 +21,8 @@ downloadable while review is pending. Full commands: `docs/release-ipa.md`.
 
 ## 1. Build
 
-- Left sidebar → **App Store** tab → the version **0.1.1** (create it if missing).
-- **Build** section → **Select a build** → choose the latest **0.1.1 (…)** build (wait if it is still processing).
+- Left sidebar → **App Store** tab → the version **0.1.4** (create it if missing).
+- **Build** section → **Select a build** → choose the latest **0.1.4 (26)** build (wait if it is still processing).
 - If asked about **Export Compliance / encryption**, answer **No** (the app uses only exempt
   encryption; `usesNonExemptEncryption` is already false).
 
@@ -62,7 +62,7 @@ downloadable while review is pending. Full commands: `docs/release-ipa.md`.
 - **Data collection:** "No, we do not collect data from this app" → results in **Data Not Collected**.
 - **Tracking:** No.
 
-## 6. Version information (0.1.1)
+## 6. Version information (0.1.4)
 
 - **Description:** paste the "Description" block from `docs/app-store-metadata.md`.
 - **Keywords:** `opencode,agent,coding,developer,terminal,approval,remote,bluetooth,cli,devtool`

@@ -60,6 +60,14 @@ https://sithartha.github.io/opencode-informer/privacy-policy.html
 opencode,agent,coding,developer,terminal,approval,remote,bluetooth,cli,devtool
 ```
 
+## What's New (0.1.4)
+
+```
+A running shell command is visible now: the session card shows the command and the
+last five lines of its output, refreshed while it runs. Sessions also keep five recent
+messages instead of three.
+```
+
 ## What's New (first version)
 
 ```
