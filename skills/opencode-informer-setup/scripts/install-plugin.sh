@@ -2,7 +2,7 @@
 # Download and install the OpenCode Informer plugin from a GitHub release.
 #
 # Usage:
-#   install-plugin.sh --app-version 0.1.2 --plugin-version 0.1.0 [--force]
+#   install-plugin.sh --app-version 0.1.4 --plugin-version 0.1.1 [--force]
 #
 # Installs to:
 #   ${XDG_CONFIG_HOME:-$HOME/.config}/opencode/open-island-mobile-plugin/
