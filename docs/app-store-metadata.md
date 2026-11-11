@@ -110,7 +110,7 @@ Suggested set (light + dark are both fine; App Review only needs accurate screen
 
 ## Checklist before Submit for Review
 
-- [ ] Build `0.1.0 (6)` processed and selectable in the version's Build section
+- [ ] Build `0.1.4 (26)` processed and selectable in the version's Build section
 - [ ] Screenshots uploaded (6.9" iPhone at minimum)
 - [ ] Description, subtitle, keywords, promotional text filled
 - [ ] Support URL and Privacy Policy URL set

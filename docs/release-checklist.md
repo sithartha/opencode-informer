@@ -67,6 +67,7 @@ downloadable while review is pending. Full commands: `docs/release-ipa.md`.
 - **Description:** paste the "Description" block from `docs/app-store-metadata.md`.
 - **Keywords:** `opencode,agent,coding,developer,terminal,approval,remote,bluetooth,cli,devtool`
 - **Promotional text:** paste from `docs/app-store-metadata.md`.
+- **What's New:** paste the "What's New (0.1.4)" block from `docs/app-store-metadata.md`.
 - **Support URL:** `https://github.com/sithartha/opencode-informer`
 - **Marketing URL:** `https://github.com/sithartha/opencode-informer`
 - **Privacy Policy URL:** `https://sithartha.github.io/opencode-informer/privacy-policy.html`
