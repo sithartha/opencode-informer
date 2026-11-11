@@ -9,8 +9,12 @@ export interface Session {
   phase: Phase
   currentTool: string | null
   lastActivity: string
-  /** The last few activity messages (most recent last), capped at three. */
+  /** The last few activity messages (most recent last), capped at five. */
   activityHistory?: string[]
+  /** The last lines of the running shell command, newest last. */
+  toolLines?: string[]
+  /** The command of the running shell tool, for the live output header. */
+  shellCommand?: string
   cost?: number
   subagents?: number
   shells?: number
@@ -151,6 +155,7 @@ export function stateFromSnapshot(snapshot: Snapshot): AppState {
     sessions[session.id] = {
       ...session,
       activityHistory: session.activityHistory ?? (session.lastActivity ? splitActivity(session.lastActivity) : []),
+      toolLines: Array.isArray(session.toolLines) ? session.toolLines.slice(-MAX_TOOL_LINES) : undefined,
     }
   }
   const pending: Record<string, PendingRequest> = {}
@@ -174,7 +179,30 @@ export function stateFromSnapshot(snapshot: Snapshot): AppState {
   }
 }
 
-const MAX_ACTIVITY_HISTORY = 3
+/** The shell command behind a tool call, from the clipped input the bridge sends. */
+export function toolCommand(input?: string): string {
+  if (!input) return ""
+  try {
+    const parsed = JSON.parse(input)
+    const value = parsed?.command ?? parsed?.cmd
+    if (typeof value === "string") return value
+  } catch {
+    // The bridge clips long input, so the JSON may be truncated; fall through.
+  }
+  const match = /"(?:command|cmd)"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(input)
+  if (match) {
+    try {
+      return JSON.parse(`"${match[1]}"`)
+    } catch {
+      return match[1]
+    }
+  }
+  return input
+}
+
+const MAX_ACTIVITY_HISTORY = 5
+/** How many shell output lines the live tool block shows. */
+export const MAX_TOOL_LINES = 5
 
 /** Split an accumulated activity string into its individual messages. */
 function splitActivity(text: string): string[] {
@@ -241,7 +269,15 @@ export function applyEvent(state: AppState, event: ActivityEvent): AppState {
     case "tool.started": {
       if (sessions[sessionID!]) {
         const session = sessions[sessionID!]
-        sessions[sessionID!] = { ...session, phase: "running", currentTool: String(data.tool ?? ""), lastActivity: String(data.tool ?? ""), shells: (session.shells ?? 0) + 1, updatedAt: Date.now() }
+        sessions[sessionID!] = { ...session, phase: "running", currentTool: String(data.tool ?? ""), lastActivity: String(data.tool ?? ""), toolLines: undefined, shellCommand: String(data.tool ?? "") === "shell" ? toolCommand(data.input != null ? String(data.input) : "") : undefined, shells: (session.shells ?? 0) + 1, updatedAt: Date.now() }
+      }
+      break
+    }
+    case "tool.output": {
+      const session = sessions[sessionID!]
+      if (session) {
+        const lines = Array.isArray(data.lines) ? data.lines.map((line: unknown) => String(line)).slice(-MAX_TOOL_LINES) : []
+        sessions[sessionID!] = { ...session, toolLines: lines.length > 0 ? lines : undefined, updatedAt: Date.now() }
       }
       break
     }
@@ -281,7 +317,10 @@ export function applyEvent(state: AppState, event: ActivityEvent): AppState {
       break
     }
     case "turn.completed": {
-      if (sessions[sessionID!]) sessions[sessionID!] = { ...sessions[sessionID!], phase: "completed", currentTool: null, updatedAt: Date.now() }
+      if (sessions[sessionID!]) {
+        const session = sessions[sessionID!]
+        sessions[sessionID!] = { ...session, phase: "completed", currentTool: null, toolLines: undefined, shellCommand: undefined, updatedAt: Date.now() }
+      }
       break
     }
     case "session.activity": {

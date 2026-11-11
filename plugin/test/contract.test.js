@@ -17,6 +17,7 @@ test("the plugin emits exactly the contract's stream events", () => {
     "prompt.submitted",
     "tool.started",
     "tool.ended",
+    "tool.output",
     "permission.requested",
     "question.asked",
     "turn.completed",

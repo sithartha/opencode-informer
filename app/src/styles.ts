@@ -224,6 +224,10 @@ function createDefaultStyles(t: Theme) {
     messageFull: { fontSize: 14, color: t.text, lineHeight: 22 },
     moreLink: { minHeight: 44, fontSize: 12, fontWeight: "600", color: t.accent, marginBottom: 4, paddingVertical: 12 },
 
+    toolOutput: { borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: t.badgeBg, borderWidth: 1, borderColor: t.border, gap: 4 },
+    toolOutputLine: { fontSize: 11, lineHeight: 15, color: t.textSecondary, fontFamily: MONO },
+    toolOutputCommand: { color: t.accent, fontWeight: "700" },
+
     inlineGlow: { borderRadius: 16, shadowOffset: { width: 0, height: 0 }, shadowRadius: 16, shadowOpacity: 0.5, elevation: 8 },
     inlineGradient: { borderRadius: 16, padding: 16 },
     inlinePendingTitle: { fontSize: 17, fontWeight: "700" },

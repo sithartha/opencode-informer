@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, Modal, ScrollView, StyleSheet, Text, TextIn
 import { LinearGradient } from "expo-linear-gradient"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import type { PendingRequest, Question, QuestionOption, Session } from "./events"
-import { optionValue } from "./events"
+import { optionValue, MAX_TOOL_LINES } from "./events"
 import type { Aggregate } from "./aggregate"
 import type { Theme } from "./theme"
 import { readableInk } from "./theme"
@@ -1207,6 +1207,26 @@ function ActivityHistory({
   )
 }
 
+/** The tail of the running shell command, refreshed live while it runs. */
+function ToolOutputBlock({ command, lines, styles }: { command?: string; lines?: string[]; styles: Styles }) {
+  const output = lines ?? []
+  if (!command && output.length === 0) return null
+  return (
+    <View style={styles.toolOutput} testID="tool-output" accessibilityLabel="Shell output">
+      {command ? (
+        <Text style={[styles.toolOutputLine, styles.toolOutputCommand]} numberOfLines={1} ellipsizeMode="tail">
+          {`$ ${command}`}
+        </Text>
+      ) : null}
+      {output.slice(-MAX_TOOL_LINES).map((line, index) => (
+        <Text key={`${index}-${line.slice(0, 12)}`} style={styles.toolOutputLine} numberOfLines={1} ellipsizeMode="tail">
+          {line.length > 0 ? line : " "}
+        </Text>
+      ))}
+    </View>
+  )
+}
+
 export function SessionCard({
   session,
   requests,
@@ -1359,6 +1379,7 @@ export function SessionCard({
           {(session.shells ?? 0) > 0 ? <Text style={styles.badge}>{session.shells} shells</Text> : null}
         </View>
         <ActivityHistory session={session} theme={theme} styles={styles} expand={Boolean(request)} />
+        <ToolOutputBlock command={session.shellCommand} lines={session.toolLines} styles={styles} />
         {request ? (
           <View style={[styles.inlineGlow, { shadowColor: glow }]}>
             <LinearGradient colors={bgGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inlineGradient}>

@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "bridge": { "host": "0.0.0.0", "defaultPort": 38963 },
   "helper": { "host": "127.0.0.1", "defaultPort": 38964, "ringPath": "/ring" },
   "endpoints": {
@@ -23,6 +23,7 @@
     "prompt.submitted",
     "tool.started",
     "tool.ended",
+    "tool.output",
     "permission.requested",
     "question.asked",
     "turn.completed",
@@ -47,6 +48,7 @@
     "prompt.submitted": { "required": ["sessionID", "text"] },
     "tool.started": { "required": ["sessionID", "tool", "input"] },
     "tool.ended": { "required": ["sessionID", "tool"] },
+    "tool.output": { "required": ["sessionID", "tool", "lines"] },
     "permission.requested": { "required": ["sessionID", "requestID", "title", "summary", "agent"] },
     "question.asked": { "required": ["sessionID", "requestID", "title", "options", "questions"] },
     "option": { "required": ["label"] },
@@ -125,6 +127,14 @@
       "value": { "sessionID": "ses_1", "tool": "Bash", "input": "npm test" }
     },
     "tool.ended": { "schema": "tool.ended", "value": { "sessionID": "ses_1", "tool": "Bash" } },
+    "tool.output": {
+      "schema": "tool.output",
+      "value": {
+        "sessionID": "ses_1",
+        "tool": "shell",
+        "lines": ["$ npm test", "PASS test/events.test.ts", "Tests: 42 passed", "Done in 3.1s"]
+      }
+    },
     "permission.requested": {
       "schema": "permission.requested",
       "value": {

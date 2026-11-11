@@ -48,10 +48,12 @@ cannot be read or written.
 ### Activity stream events
 
 `session.started`, `session.ended`, `prompt.submitted`, `tool.started`, `tool.ended`,
-`permission.requested`, `question.asked`, `turn.completed`, `session.activity`,
-`session.updated`, `actionable.resolved`.
+`tool.output`, `permission.requested`, `question.asked`, `turn.completed`,
+`session.activity`, `session.updated`, `actionable.resolved`.
 
 `session.updated` carries the session's `agent` and `model` when they change.
+`tool.output` carries the last few lines of a running shell command, re-sent
+whenever the tail of its output file changes.
 
 Payload shapes are defined in `../contract/contract.json` (a copy of the fixtures).
 

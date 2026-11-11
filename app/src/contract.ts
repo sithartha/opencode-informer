@@ -2,7 +2,7 @@
 // stay identical (test/contract-parity.test.ts).
 
 export const CONTRACT = {
-  version: 3,
+  version: 4,
   bridge: { host: "0.0.0.0", defaultPort: 38963 },
   helper: { host: "127.0.0.1", defaultPort: 38964, ringPath: "/ring" },
   endpoints: {
@@ -26,6 +26,7 @@ export const CONTRACT = {
     "prompt.submitted",
     "tool.started",
     "tool.ended",
+    "tool.output",
     "permission.requested",
     "question.asked",
     "turn.completed",

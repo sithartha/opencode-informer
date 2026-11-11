@@ -4,6 +4,7 @@ import { ResolutionCoordinator } from "./resolution.js"
 import { createBridgeServer } from "./server.js"
 import { createDoorbell } from "./doorbell.js"
 import { configFromEnv } from "./contract.js"
+import { ShellOutputTracker } from "./shellOutput.js"
 import { buildFormAnswer, readService, replyToForm, replyToPermission } from "./serviceReply.js"
 import { superviseEventStream } from "./eventStream.js"
 import { appendFileSync } from "node:fs"
@@ -145,6 +146,15 @@ export function buildBridge(options = {}) {
   })
 
   const listSessions = options.listSessions || defaultListSessions
+  // Live shell tail: `shell.created` names the output file, and each change in
+  // its last few lines becomes a `tool.output` event on the stream.
+  const shellOutput = new ShellOutputTracker({
+    resolveSession: (sessionID) => model.rootSession(sessionID),
+    onLines: (sessionID, lines) => {
+      model.setToolLines(sessionID, lines)
+      server.broadcast("tool.output", { sessionID, tool: "shell", lines })
+    },
+  })
   /**
    * Seed the model with sessions that were already open before this plugin loaded.
    * Runs before the HTTP server starts so the first snapshot the phone fetches is
@@ -221,6 +231,7 @@ export function buildBridge(options = {}) {
 
   function handleEvent(event) {
     dbg("event", { type: event && event.type, data: event && event.data })
+    shellOutput.observe(event)
     const events = model.apply(event)
     const lifecycle = /session\.(created|deleted|idle|status|execution)/.test(String(event && event.type))
     if (events.length > 0 || lifecycle) {
@@ -258,7 +269,7 @@ export function buildBridge(options = {}) {
     return events
   }
 
-  return { config, model, pairing, resolution, server, doorbell, handleEvent, hydrate }
+  return { config, model, pairing, resolution, server, doorbell, handleEvent, hydrate, shellOutput }
 }
 
 function makePermissionApplier(ctx) {
@@ -460,6 +471,7 @@ export async function setup(ctx, options = {}) {
 
   bridge.stop = async () => {
     abort.abort()
+    bridge.shellOutput?.stopAll()
     await bridge.server.stop()
     delete globalThis[STARTED_KEY]
   }

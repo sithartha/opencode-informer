@@ -80,18 +80,54 @@ test("session.activity updates the session's last activity", () => {
   assert.equal(state.sessions.s1.lastActivity, "Running the tests")
 })
 
-test("activity history keeps the last three messages", () => {
+test("activity history keeps the last five messages", () => {
   let state = emptyState()
   state = applyEvent(state, { type: "session.started", data: { sessionID: "s1" } })
-  for (const text of ["First", "Second", "Third", "Fourth"]) {
+  for (const text of ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"]) {
     state = applyEvent(state, { type: "session.activity", data: { sessionID: "s1", text } })
   }
-  assert.deepEqual(state.sessions.s1.activityHistory, ["Second", "Third", "Fourth"])
-  assert.equal(state.sessions.s1.lastActivity, "Fourth")
+  assert.deepEqual(state.sessions.s1.activityHistory, ["Second", "Third", "Fourth", "Fifth", "Sixth"])
+  assert.equal(state.sessions.s1.lastActivity, "Sixth")
 
   // Combined text (bridge append) is split rather than duplicated.
-  state = applyEvent(state, { type: "session.activity", data: { sessionID: "s1", text: "Third\n\nFourth" } })
-  assert.deepEqual(state.sessions.s1.activityHistory, ["Third", "Fourth"])
+  state = applyEvent(state, { type: "session.activity", data: { sessionID: "s1", text: "Fifth\n\nSixth" } })
+  assert.deepEqual(state.sessions.s1.activityHistory, ["Fifth", "Sixth"])
+})
+
+test("tool.output keeps the last five shell lines and tool.started clears them", () => {
+  let state = emptyState()
+  state = applyEvent(state, { type: "session.started", data: { sessionID: "s1" } })
+  state = applyEvent(state, { type: "tool.started", data: { sessionID: "s1", tool: "shell", input: "npm test" } })
+  state = applyEvent(state, {
+    type: "tool.output",
+    data: { sessionID: "s1", tool: "shell", lines: ["1", "2", "3", "4", "5", "6", "7"] },
+  })
+  assert.deepEqual(state.sessions.s1.toolLines, ["3", "4", "5", "6", "7"])
+
+  state = applyEvent(state, { type: "tool.started", data: { sessionID: "s1", tool: "edit", input: "src/a.ts" } })
+  assert.equal(state.sessions.s1.toolLines, undefined)
+})
+
+test("a finished turn clears the shell block", () => {
+  let state = emptyState()
+  state = applyEvent(state, { type: "session.started", data: { sessionID: "s1" } })
+  state = applyEvent(state, { type: "tool.output", data: { sessionID: "s1", tool: "shell", lines: ["done"] } })
+  state = applyEvent(state, { type: "turn.completed", data: { sessionID: "s1", summary: "All set" } })
+  assert.equal(state.sessions.s1.toolLines, undefined)
+})
+
+test("a shell tool keeps the command for the output header", () => {
+  let state = emptyState()
+  state = applyEvent(state, { type: "session.started", data: { sessionID: "s1" } })
+  state = applyEvent(state, { type: "tool.started", data: { sessionID: "s1", tool: "shell", input: '{"command":"npm test","timeout":120000}' } })
+  assert.equal(state.sessions.s1.shellCommand, "npm test")
+
+  // Clipped input (the bridge caps it) still yields the command.
+  state = applyEvent(state, { type: "tool.started", data: { sessionID: "s1", tool: "shell", input: '{"command":"npm run build","cwd":"/Users/dev/a","timeout":1200…' } })
+  assert.equal(state.sessions.s1.shellCommand, "npm run build")
+
+  state = applyEvent(state, { type: "tool.started", data: { sessionID: "s1", tool: "edit", input: '{"filePath":"src/a.ts"}' } })
+  assert.equal(state.sessions.s1.shellCommand, undefined)
 })
 
 test("session.cost updates the session's cost", () => {
@@ -163,7 +199,7 @@ test("stateFromSnapshot splits activity into history", () => {
     activeSessionCount: 1,
     sessions: [{ id: "s1", agent: "opencode", cwd: "/tmp", phase: "running", currentTool: null, lastActivity: "One\n\nTwo\n\nThree\n\nFour", updatedAt: 0 }],
   })
-  assert.deepEqual(state.sessions.s1.activityHistory, ["Two", "Three", "Four"])
+  assert.deepEqual(state.sessions.s1.activityHistory, ["One", "Two", "Three", "Four"])
 })
 
 test("stateFromSnapshot carries a multi-question form", () => {

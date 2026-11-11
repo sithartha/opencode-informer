@@ -549,3 +549,22 @@ test("a session adopted before its parent is learned folds into the parent", () 
   assert.ok(!snap.sessions.some((s) => s.id === "child"))
   assert.equal(snap.sessions.find((s) => s.id === "root").subagents, 1)
 })
+
+test("shell output lines are kept for the snapshot and cleared by the next tool", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_1")])
+  apply(model, [{ type: "session.tool.called", data: { sessionID: "ses_1", id: "t1", name: "shell", input: { command: "npm test" } } }])
+  model.setToolLines("ses_1", ["1", "2", "3", "4", "5", "6"])
+  assert.deepEqual(model.snapshot().sessions[0].toolLines, ["2", "3", "4", "5", "6"])
+  apply(model, [{ type: "session.tool.called", data: { sessionID: "ses_1", id: "t2", name: "shell", input: { command: "ls" } } }])
+  assert.equal(model.snapshot().sessions[0].toolLines, undefined)
+})
+
+test("finishing a turn drops the shell output block", () => {
+  const model = new ActivityModel()
+  apply(model, [created("ses_1")])
+  apply(model, [{ type: "session.tool.called", data: { sessionID: "ses_1", id: "t1", name: "shell", input: { command: "ls" } } }])
+  model.setToolLines("ses_1", ["a", "b"])
+  apply(model, [{ type: "session.idle", data: { sessionID: "ses_1" } }])
+  assert.equal(model.snapshot().sessions[0].toolLines, undefined)
+})

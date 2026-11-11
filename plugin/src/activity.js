@@ -6,6 +6,8 @@ const MAX_RESOLVED = 5000
 // Cap the activity text carried in snapshots/notifications while a question keeps
 // appending, so a long back-and-forth cannot grow unbounded.
 const MAX_ACTIVITY = 4000
+// The phone shows a live block with the tail of the running shell command.
+const MAX_TOOL_LINES = 5
 
 function appendActivity(existing, next) {
   if (!existing) return next
@@ -112,6 +114,19 @@ export class ActivityModel {
 
   get(id) {
     return this.sessions.get(this.rootSession(id))
+  }
+
+  /**
+   * Record the newest lines of the running shell command. The tail tracker owns
+   * the polling; the model only keeps the result so reconnects can resend it.
+   */
+  setToolLines(id, lines) {
+    const session = this.sessions.get(this.rootSession(id))
+    if (!session) return
+    const list = Array.isArray(lines) ? lines.slice(-MAX_TOOL_LINES) : []
+    if (list.length === 0) return
+    session.toolLines = list
+    session.updatedAt = Date.now()
   }
 
   /** True while the session has an unanswered question form. */
@@ -344,6 +359,7 @@ export class ActivityModel {
           if (session) {
             session.phase = "running"
             session.currentTool = null
+            delete session.toolLines
             if (text) session.lastActivity = text
             session.updatedAt = Date.now()
           }
@@ -359,6 +375,7 @@ export class ActivityModel {
         if (session) {
           session.phase = "completed"
           session.currentTool = null
+          delete session.toolLines
           session.updatedAt = Date.now()
           out.push(ev("session.updated", { sessionID: session.id, phase: "completed" }))
         }
@@ -385,6 +402,7 @@ export class ActivityModel {
         if (session && session.phase !== "waiting-permission" && session.phase !== "waiting-answer") {
           session.phase = "completed"
           session.currentTool = null
+          delete session.toolLines
           session.updatedAt = Date.now()
           out.push(ev("turn.completed", { sessionID: payload.sessionID, summary: session.lastActivity || "" }))
         }
@@ -397,6 +415,7 @@ export class ActivityModel {
         if (session) {
           session.phase = "completed"
           session.currentTool = null
+          delete session.toolLines
           session.updatedAt = Date.now()
         }
         // Only a successful turn end is a "task complete" worth notifying.
@@ -412,6 +431,7 @@ export class ActivityModel {
         if (session) {
           session.phase = "completed"
           session.currentTool = null
+          delete session.toolLines
           session.updatedAt = Date.now()
         }
         return out
@@ -457,6 +477,8 @@ export class ActivityModel {
           session.lastActivity = name
           session.phase = "running"
           session.shells = (session.shells || 0) + 1
+          // The previous command's output belongs to the previous tool call.
+          delete session.toolLines
           session.updatedAt = Date.now()
         }
         out.push(ev("tool.started", { sessionID: root, tool: name, input: clip(payload.input) }))
