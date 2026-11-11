@@ -5,7 +5,7 @@ version; the newest row is the current recommendation.
 
 | App / IPA | Build | Min iOS | Plugin | macOS helper | Cross-platform helper | Verified | Notes |
 |---|---|---|---|---|---|---|---|
-| 0.1.4 | 26 | 16.4 | 0.1.1 | 0.4.4 | 0.2.2 | partial | Current release. Shows the last five lines of the running shell command live, and keeps five activity messages instead of three. |
+| 0.1.4 | 26 | 16.4 | 0.1.1 | 0.4.4 | 0.2.2 | yes | Current release. Shows the last five lines of the running shell command live, and keeps five activity messages instead of three. Exercised on a physical iPhone with a local Release build: live shell output, pairing, live activity, and one approval round trip. |
 | 0.1.3 | 24 | 16.4 | 0.1.0 | 0.4.4 | 0.2.2 | yes | Published IPA sideloaded on a physical iPhone and exercised end to end — pairing, live activity, and one approval round trip. Adds per-skin avatar silhouettes (hexagon, square, squircle, circle). |
 | 0.1.2 | 23 | 16.4 | 0.1.0 | 0.4.4 | 0.2.2 | partial | Built and launched locally; the published IPA has not yet been sideloaded end to end. |
 | 0.1.1 | unknown (EAS-managed) | 16.4 | 0.1.0 | 0.4.3 | 0.2.0 | no | App Store release. Not re-tested against this install path. |
